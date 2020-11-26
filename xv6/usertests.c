@@ -8,6 +8,8 @@
 #include "traps.h"
 #include "memlayout.h"
 
+#include "rand.h"
+
 char buf[8192];
 char name[3];
 char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };
@@ -328,7 +330,7 @@ void
 mem(void)
 {
   void *m1, *m2;
-  int pid, ppid, ctimes = 0;
+  int pid, ppid;
 
   printf(1, "mem test\n");
   ppid = getpid();
@@ -337,9 +339,7 @@ mem(void)
     while((m2 = malloc(10001)) != 0){
       *(char**)m2 = m1;
       m1 = m2;
-      ctimes += 1;
     }
-    printf(1, "cnt: %d\n", ctimes);
     while(m1){
       m2 = *(char**)m1;
       free(m1);
@@ -359,7 +359,47 @@ mem(void)
   }
 }
 
+void
+mem_rand(void)
+{
+  void *free_list, *keep_list, *cur_block;
+  int pid, ppid;
 
+  sgenrand(233);
+
+  printf(1, "random mem test\n");
+  ppid = getpid();
+  if((pid = fork()) == 0){
+    free_list = keep_list = 0;
+    // 随机malloc
+    while((cur_block = malloc(genrand() % 63937 + 64)) != 0){
+      if (genrand() % 3 == 0){
+        *(char**)cur_block = free_list;
+        free_list = cur_block;
+      }
+      else{
+        *(char**)cur_block = keep_list;
+        keep_list = cur_block;
+      }
+    }
+    // 随机free
+    while(free_list){
+      cur_block = *(char**)free_list;
+      free(free_list);
+      free_list = cur_block;
+    }
+    // 二次随机malloc
+    while((cur_block = malloc(genrand() % 63937 + 64)) != 0){
+      *(char**)cur_block = keep_list;
+      keep_list = cur_block;
+    }
+    // TODO: 检测内存利用率
+    printf(1, "random mem ok\n");
+    exit();
+  } else {
+    wait();
+  }
+}
 
 // More file system tests
 
@@ -1632,7 +1672,8 @@ main(int argc, char *argv[])
   writetest1();
   createtest();*/
 
-  mem();
+  //mem();
+  mem_rand();
   /*pipe1();
   preempt();
   exitwait();

@@ -1,3 +1,5 @@
+#include "virtualMemory.h"
+
 // Segments in proc->gdt.
 #define NSEGS     7
 
@@ -66,6 +68,23 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // 虚拟内存页表
+  struct internalMemoryTable *internalTableHead;
+  struct internalMemoryTable *internalTableTail;
+  // 虚拟内存链表
+  struct internalMemoryEntry *internalEntryHead;
+  struct internalMemoryEntry *internalEntryTail;
+
+  // 外存页表
+  struct externalTablePage *externalListHead;
+  struct externalTablePage *externalListTail;
+
+  struct file *externalFiles[EXTERNAL_FILE_MAX_NUM];
+
+  int internalEntryCnt;
+  int externalEntryCnt;
+
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -26,37 +26,29 @@ pinit(void)
 	initlock(&ptable.lock, "ptable");
 }
 
-// Must be called with interrupts disabled to avoid the caller being
-// rescheduled between reading lapicid and running through the loop.
-struct cpu*
-mycpu(void)
+// 初始化虚拟内存
+void InitVirtualMemoryData()
 {
-	int apicid, i;
-  
-	if(readeflags()&FL_IF)
-		panic("mycpu called with interrupts enabled\n");
-  
-	apicid = lapicid();
-	// APIC IDs are not guaranteed to be contiguous. Maybe we should have
-	// a reverse map, or reserve a register to store &cpus[i].
-	for (i = 0; i < ncpu; ++i) {
-		if (cpus[i].id == apicid)
-			return &cpus[i];
-	}
-	panic("unknown apicid\n");
-}
+  int i;
+  struct proc *curProc;
+  acquire(&ptable.lock);
+  for (i = 0; i < NPROC; i++)
+  {
+    curProc = &ptable.proc[i];
+    curProc->internalEntryCnt = 0;
+    curProc->externalEntryCnt = 0;
+    curProc->internalEntryHead = 0;
+    curProc->internalEntryTail = 0;
+    curProc->internalTableHead = 0;
+    curProc->internalEntryTail = 0;
+    curProc->externalListHead = 0;
+    curProc->externalListTail = 0;
 
-// Disable interrupts so that we are not rescheduled
-// while reading proc from the cpu structure
-struct proc*
-myproc(void) {
-	struct cpu *c;
-	struct proc *p;
-	pushcli();
-	c = mycpu();
-	p = c->proc;
-	popcli();
-	return p;
+    int j;
+    for (j = 0; j < EXTERNAL_FILE_MAX_NUM; j++)
+      curProc->externalFiles[j] = 0;
+  }
+  release(&ptable.lock);
 }
 
 //PAGEBREAK: 32
@@ -204,6 +196,7 @@ fork(void)
 	pid = np->pid;
 	safestrcpy(np->name, proc->name, sizeof(proc->name));
 
+	// 分配交换文件
 	initExternalFiles(np);
 	char buf[PGSIZE / 2] = "";
 	int offset = 0;
@@ -220,6 +213,10 @@ fork(void)
 			offset += nread;
 		}
 	}
+
+	// 复制虚拟内存
+	if (copyInternalMemory(proc, np) == -1)
+		return -1;
 
 	acquire(&ptable.lock);
 	np->state = RUNNABLE;

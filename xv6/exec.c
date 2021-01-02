@@ -32,6 +32,10 @@ exec(char *path, char **argv)
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
+  // 初始化虚拟内存表
+  clearInternalList(proc);
+  clearExternalList(proc);
+
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
@@ -88,6 +92,11 @@ exec(char *path, char **argv)
   proc->sz = sz;
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
+
+  // 为进程创建外部存储文件
+  clearExternalFiles(proc);
+  initExternalFiles(proc);
+
   switchuvm(proc);
   freevm(oldpgdir);
   return 0;

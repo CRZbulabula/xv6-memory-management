@@ -13,199 +13,220 @@
 #include "proc.h"
 #include "elf.h"
 
+// 提取并移除内部存储的最后一项
+struct internalMemoryEntry* getlastInternalEntry(struct proc *curProcess)
+{
+	struct internalMemoryEntry *curTail;
+	curTail = curProcess->internalTableTail;
+	if (curTail == 0 || curTail->pre == 0)
+	{
+		panic("error: The last entry of internal memory is NULL!");
+	}
+	curProcess->internalTableTail = curTail->pre;
+	curTail->pre->nxt = 0;
+	curTail->pre = 0;
+	return curTail;
+}
 
-//以下是虚拟内存数据结构的动态修改，更新函数，主要用于虚拟内存的具体管理---内存分配，释放，处理缺页中断
-/*
-描述：提取并移除内存链表尾，并且更新链表
-参数：当前进程
-返回：链表尾
-*/
-// struct MemoryTableEntry* GetMemoryListTail(struct proc *CurrentProcess)
-// {
-// 	struct MemoryTableEntry *CurrentEntry, *ListTail;
-// 	CurrentEntry = CurrentProcess->MemoryListHead;
-// 	if (CurrentEntry == 0 || CurrentEntry->Next == 0)
-// 	{
-// 		panic("[ERROR] It is impossible for the memory list used to be full!");
-// 	}
-// 	ListTail = CurrentProcess->MemoryListTail;
-// 	if (ListTail == 0 || ListTail->Last == 0)
-// 	{
-// 		panic("[ERROR] The Last of the memory list should not be NULL!");
-// 	}
-// 	CurrentProcess->MemoryListTail = ListTail->Last;
-// 	ListTail->Last->Next = 0;
-// 	ListTail->Last = 0;
-// 	return ListTail;
-// }
+// 更新内存表项并置为表头
+void setInternalHead(struct proc *curProcess, struct internalMemoryEntry* curEntry, char* TheVirtualAddress)
+{
+	curEntry->nxt = curProcess->internalEntryHead;
+	curProcess->internalEntryHead->pre = curEntry;
+	curProcess->internalEntryHead = curEntry;
+	curEntry->virtualAddress = TheVirtualAddress;
+}
 
-/*
-描述：将一个entry地址设置为指定地址，并且设置为链表头
-参数：当前进程，新头entry，新头地址
-返回：无
-*/
-// void SetMemoryListHead(struct proc *CurrentProcess, struct MemoryTableEntry* TheEntry, char* TheVirtualAddress)
-// {
-// 	TheEntry->Next = CurrentProcess->MemoryListHead;
-// 	CurrentProcess->MemoryListHead->Last = TheEntry;
-// 	CurrentProcess->MemoryListHead = TheEntry;
-// 	TheEntry->VirtualAddress = TheVirtualAddress;
-// }
+// 移除一个外存表项
+void deleteExternalEntry(struct proc *curProcess, char* delVirtualAddress)
+{
+	int entryCnt = 0, pageCnt = 0;
+	struct externalMemoryTable *curPage;
 
-/*
-描述：将一个entry地址设置为可用，并且移除出链表
-参数：当前进程，entry
-返回：无
-*/
-// void RemoveFromMemoryList(struct proc *CurrentProcess, struct MemoryTableEntry* TheEntry)
-// {
-// 	TheEntry->VirtualAddress = SLOT_USABLE;
-// 	if (CurrentProcess->MemoryListHead == TheEntry)
-// 	{
-// 		if (TheEntry->Next != 0)
-// 		{
-// 			TheEntry->Next->Last = 0;
-// 		}
-// 		CurrentProcess->MemoryListHead = TheEntry->Next;
-// 	}
-// 	else
-// 	{
-// 		struct MemoryTableEntry *CurrentPlace = CurrentProcess->MemoryListHead;
-// 		while (CurrentPlace->Next != TheEntry)
-// 		{
-// 			CurrentPlace = CurrentPlace->Next;
-// 		}
-// 		if(TheEntry->Next != 0)
-// 		{
-// 			TheEntry->Next->Last = CurrentPlace;
-// 			CurrentPlace->Next = TheEntry->Next;
-// 		}
-// 		else
-// 		{
-// 			CurrentPlace->Next = 0;
-// 		}
+	//在原来swaptable找
+	curPage = curProcess->externalListHead;
+	while (curPage != 0)
+	{
+		for (entryCnt = 0; entryCnt < EXTERNAL_TABLE_ENTRY_NUM; entryCnt++)
+		{
+			if (curPage->entryList[entryCnt].virtualAddress == delVirtualAddress)
+			{
+				curPage->entryList[entryCnt].virtualAddress = SLOT_USABLE;
+				return;
+			}
+		}
+		curPage = curPage->nxt;
+		pageCnt++;
+	}
+	panic("delete error: cannot find external entry!");
+}
 
-// 	}
-// 	TheEntry->Next = 0;
-// 	TheEntry->Last = 0;
-// 	CurrentProcess->MemoryEntryNum --;
-// }
+// 移除一个内存表项
+void deleteInternalEntry(struct proc *curProcess, char* delVirtualAddress)
+{
+	if (curProcess->internalEntryHead->virtualAddress == delVirtualAddress)
+	{
+		curProcess->internalEntryHead->virtualAddress = SLOT_USABLE;
+		if (curProcess->internalEntryHead->nxt != 0)
+		{
+			curProcess->internalEntryHead->pre = 0;
+		}
+		else
+		{
+			curProcess->internalEntryTail = 0;
+		}
+		
+		struct internalMemoryEntry *newHead = curProcess->internalEntryHead->nxt;
+		curProcess->internalEntryHead->nxt = 0;
+		curProcess->internalEntryHead = newHead;
+	}
+	else
+	{
+		int entryCnt = 0, pageCnt = 0;
+		struct internalMemoryTable *curPage;
 
+		curPage = curProcess->internalTableHead;
+		while (curPage != 0)
+		{
+			for (entryCnt = 0; entryCnt < INTERNAL_TABLE_ENTRY_NUM; entryCnt++)
+			{
+				if (curPage->entryList[entryCnt].virtualAddress == delVirtualAddress)
+				{
+					struct internalMemoryEntry *curEntry = &(curPage->entryList[entryCnt]);
+					curEntry->pre->nxt = curEntry->nxt;
+					if (curEntry->nxt != 0)
+					{
+						curEntry->nxt->pre = curEntry->pre;
+					}
+					else
+					{
+						curProcess->internalEntryTail = curEntry->pre;
+					}
+					curEntry->virtualAddress = SLOT_USABLE;
+					curEntry->pre = 0;
+					curEntry->nxt = 0;
+					curProcess->internalEntryCnt--;
+					return;
+				}
+			}
+			curPage = curPage->nxt;
+			pageCnt++;
+		}
+		panic("delete error: cannot find internal entry!");
+	}
+}
 
-/*
-描述：在内存表里找对应位置
-参数：当前进程，虚拟地址
-返回：空位(包括位置，偏置)
-*/
-// struct MemoryTableEntry* GetAddressInMemoryTable(struct proc *CurrentProcess, char* TheVirtualAddress)
-// {
-// 	struct MemoryTablePage *CurrentPage;
-// 	struct MemoryTableEntry* ThePlace;
-// 	int EntryNum = 0, PageNum = 0;
+// 清理一页外存表
+void clearExternalTable(struct externalMemoryTable *curTable, uint clearLink)
+{
+	int i;
+	for (i = 0; i < EXTERNAL_TABLE_ENTRY_NUM; i++)
+	{
+		curTable->entryList[i].virtualAddress = SLOT_USABLE;
+	}
+	if (clearLink)
+	{
+		curTable->pre = 0;
+		curTable->nxt = 0;
+	}
+}
 
-// 	//在原来swaptable找
-// 	CurrentPage = CurrentProcess->MemoryTableListHead;
-// 	while (CurrentPage != 0)
-// 	{
-// 		for (EntryNum = 0; EntryNum < MEMORY_TABLE_ENTRY_NUM; EntryNum ++)
-// 		{
-// 			if (CurrentPage->EntryList[EntryNum].VirtualAddress == TheVirtualAddress)
-// 			{
-// 				ThePlace = &(CurrentPage->EntryList[EntryNum]);
-// 				return ThePlace;
-// 			}
-// 		}
-// 		CurrentPage = CurrentPage->Next;
-// 		PageNum ++;
-// 	}
-// 	panic("[ERROR] Should find a record in memory table!");
-// }
+// 清理一个进程的外存表
+void clearExternalList(struct proc *curProcess)
+{
+  	struct externalMemoryTable *curPage;
+  	curPage = curProcess->externalListHead;
+	while (curPage != 0)
+  	{
+		clearExternalTable(curPage, 0);
+		curPage = curPage->nxt;
+  	}
+}
 
+// 生成一页新的外存表
+struct externalMemoryTable* allocExternalTable()
+{
+	struct externalMemoryTable *newTable;
+	if ((newTable = (struct externalMemoryTable *)kalloc()) == 0)
+	{
+		return 0;
+	}
+	clearExternalTable(newTable, 1);
+	return newTable;
+}
 
-/*
-描述：在交换表里找空位，没有就新开一个空的位置
-参数：当前进程
-返回：空位(包括位置，偏置)
-*/
-// struct SwapTablePlace GetEmptyInSwapTable(struct proc *CurrentProcess)
-// {
-// 	struct SwapTablePage *CurrentPage;
-// 	struct SwapTablePlace ThePlace;
-// 	int EntryNum = 0, PageNum = 0;
+// 分配新的外存表
+int growExternalTable(struct proc *curProcess)
+{
+  	struct externalMemoryTable **head, **tail;
+  	head = &(curProcess->externalListHead);
+  	tail = &(curProcess->externalListTail);
+  
+  	if (*head == 0)
+  	{
+		if ((*head = allocExternalTable()) == 0)
+		{
+			return -1;
+		}
+		*tail = *head;
+  	}
+  	else
+  	{
+		struct externalMemoryTable *tmp = *tail;
+		if ((*tail = allocExternalTable()) == 0)
+		{
+			return -1;
+		}
+		tmp->pre = *tail;
+		(*tail)->nxt = tmp;
+		curProcess->externalListTail = *tail;
+  	}
 
-// 	//在原来swaptable找
-// 	CurrentPage = CurrentProcess->SwapTableListHead;
-// 	while (CurrentPage != 0)
-// 	{
-// 		for (EntryNum = 0; EntryNum < SWAP_TABLE_ENTRY_NUM; EntryNum ++)
-// 		{
-// 			if (CurrentPage->EntryList[EntryNum].VirtualAddress == SLOT_USABLE)
-// 			{
-// 				ThePlace.Place = &(CurrentPage->EntryList[EntryNum]);
-// 				ThePlace.Offset = PageNum * SWAP_TABLE_PAGE_OFFSET + EntryNum * PGSIZE;
-// 				return ThePlace;
-// 			}
-// 		}
-// 		CurrentPage = CurrentPage->Next;
-// 		PageNum ++;
-// 	}
+  	return 0;
+}
 
-// 	//找不到：新增一页继续
-// 	GrowSwapTable(CurrentProcess);
-// 	CurrentPage = CurrentProcess->SwapTableListTail;
-// 	for (EntryNum = 0; EntryNum < SWAP_TABLE_ENTRY_NUM; EntryNum ++)
-// 	{
-// 		if (CurrentPage->EntryList[EntryNum].VirtualAddress == SLOT_USABLE)
-// 		{
-// 			ThePlace.Place = &(CurrentPage->EntryList[EntryNum]);
-// 			ThePlace.Offset = PageNum * SWAP_TABLE_PAGE_OFFSET + EntryNum * PGSIZE;
-// 			return ThePlace;
-// 		}
-// 	}
-// 	panic("[ERROR] Should find an empty place in the swap table!");
-// }
+// 在外部存储中找到一个空位
+struct externalMemoryPlace getEmptyExternalPlace(struct proc *curProcess)
+{
+	int entryCnt = 0, pageCnt = 0;
+	struct externalMemoryTable *curPage;
+	struct externalMemoryPlace retPlace;
 
-/*
-描述：在交换表里找对应位置
-参数：当前进程，位置
-返回：空位(包括位置，偏置)
-*/
-// struct SwapTablePlace GetAddressInSwapTable(struct proc *CurrentProcess, char* TheVirtualAddress)
-// {
-// 	struct SwapTablePage *CurrentPage;
-// 	struct SwapTablePlace ThePlace;
-// 	int EntryNum = 0, PageNum = 0;
+	curPage = proc->externalListHead;
+	while (curPage != 0)
+	{
+		for (entryCnt = 0; entryCnt < EXTERNAL_TABLE_ENTRY_NUM; entryCnt++)
+		{
+			if (curPage->entryList[entryCnt].virtualAddress == SLOT_USABLE)
+			{
+				retPlace.Entry = &(curPage->entryList[entryCnt]);
+				retPlace.Offset = pageCnt * EXTERNAL_TABLE_OFFSET + entryCnt * PGSIZE;
+				return retPlace;
+			}
+		}
+		curPage = curPage->nxt;
+		pageCnt++;
+	}
 
-// 	//在原来swaptable找
-// 	CurrentPage = CurrentProcess->SwapTableListHead;
-// 	while (CurrentPage != 0)
-// 	{
-// 		for (EntryNum = 0; EntryNum < SWAP_TABLE_ENTRY_NUM; EntryNum ++)
-// 		{
-// 			if (CurrentPage->EntryList[EntryNum].VirtualAddress == TheVirtualAddress)
-// 			{
-// 				ThePlace.Place = &(CurrentPage->EntryList[EntryNum]);
-// 				ThePlace.Offset = PageNum * SWAP_TABLE_PAGE_OFFSET + EntryNum * PGSIZE;
-// 				return ThePlace;
-// 			}
-// 		}
-// 		CurrentPage = CurrentPage->Next;
-// 		PageNum ++;
-// 	}
-// 	panic("[ERROR] Should find the place in the swap table!");
-// }
-
-/*
-描述：将一个虚拟地址对应的交换表entry地址设置为可用
-参数：当前进程，地址
-返回：无
-*/
-// void RemoveFromSwapTable(struct proc *CurrentProcess, char* TheVirtualAddress)
-// {
-// 	struct SwapTablePlace ThePlace = GetAddressInSwapTable(CurrentProcess, TheVirtualAddress);
-// 	struct SwapTableEntry* TheEntry = ThePlace.Place;
-// 	TheEntry->VirtualAddress = SLOT_USABLE;
-// }
+	// 新增一页外部存储并继续查找
+	growExternalTable(curProcess);
+	curPage = proc->externalListTail;
+	while (curPage != 0)
+	{
+		for (entryCnt = 0; entryCnt < EXTERNAL_TABLE_ENTRY_NUM; entryCnt++)
+		{
+			if (curPage->entryList[entryCnt].virtualAddress == SLOT_USABLE)
+			{
+				retPlace.Entry = &(curPage->entryList[entryCnt]);
+				retPlace.Offset = pageCnt * EXTERNAL_TABLE_OFFSET + entryCnt * PGSIZE;
+				return retPlace;
+			}
+		}
+		curPage = curPage->nxt;
+		pageCnt++;
+	}
+	panic("error: cannot find empty external place!");
+}
 
 // 清理一页虚拟内存表
 void clearInternalTable(struct internalMemoryTable *curTalbe, int clearLink)
@@ -224,8 +245,22 @@ void clearInternalTable(struct internalMemoryTable *curTalbe, int clearLink)
 	}
 }
 
+// 清理进程的虚拟内存表
+void clearInternalList(struct proc *curProcess)
+{
+	struct internalMemoryTable *curTable = curProcess->internalTableHead;
+	while (curTable != 0)
+	{
+		clearInternalTable(curTable, 0);
+		curTable = curTable->nxt;
+	}
+	curProcess->internalEntryCnt = 0;
+	curProcess->internalEntryHead = 0;
+	curProcess->internalEntryTail = 0;
+}
+
 // 生成一页虚拟内存表
-struct internalMemoryTable *allocInternalTable(void)
+struct internalMemoryTable *allocInternalTable()
 {
 	struct internalMemoryTable *newTable;
 	if ((newTable = (struct internalMemoryTable *)kalloc()) == 0)
@@ -262,169 +297,65 @@ void allocInternalList(struct proc *curProcess)
 	curProcess->internalTableTail = curTable;
 }
 
-// 清理进程的虚拟内存表
-void clearInternalList(struct proc *curProcess)
+// 复制交换表和交换文件
+int copyInternalMemory(struct proc *src, struct proc *dst)
 {
-	struct internalMemoryTable *curTable = curProcess->internalTableHead;
-	while (curTable != 0)
-	{
-		clearInternalTable(curTable, 0);
-		curTable = curTable->nxt;
-	}
-	curProcess->internalEntryCnt = 0;
-	curProcess->internalEntryHead = 0;
-	curProcess->internalEntryTail = 0;
+	//复制交换表
+  	clearInternalList(dst);
+  	dst->internalTableHead = 0;
+  	dst->internalTableTail = 0;
+  	dst->internalEntryCnt = src->externalEntryCnt;
+
+  	int dstEntryCnt = 0;
+  	struct internalMemoryTable *curDstPage = dst->internalTableHead;
+  	struct internalMemoryEntry *curSrcEntry = src->internalEntryHead;
+  	struct internalMemoryEntry *preDstEntry = 0;
+
+  	if (curSrcEntry != 0)
+  	{
+		dst->internalTableHead = &(curDstPage->entryList[dstEntryCnt]);
+  	}
+  	while (curSrcEntry != 0)
+  	{
+		if (preDstEntry != 0)
+		{
+	  		preDstEntry->nxt = &(curDstPage->entryList[dstEntryCnt]);
+		}
+		curDstPage->entryList[dstEntryCnt].pre = preDstEntry;
+		preDstEntry = &(curDstPage->entryList[dstEntryCnt]);
+		curDstPage->entryList[dstEntryCnt].virtualAddress = curSrcEntry->virtualAddress;
+		dstEntryCnt++;
+		curSrcEntry = curSrcEntry->nxt;
+		if (dstEntryCnt == INTERNAL_TABLE_ENTRY_NUM)
+		{
+	  		curDstPage = curDstPage->nxt;
+	  		dstEntryCnt = 0;
+		}
+  	}
+  	dst->internalTableTail = preDstEntry;
+
+	//复制交换文件
+  	int i;
+  	struct externalMemoryTable *SourceSwapPage, *DestinationSwapPage;
+  	while (src->externalEntryCnt > dst->externalEntryCnt)
+  	{
+		if (growExternalTable(dst) == 0)
+		{
+	  		return -1;
+		}
+		dst->externalEntryCnt++;
+  	}
+
+  	SourceSwapPage = src->externalListHead;
+  	DestinationSwapPage = dst->externalListHead;
+  	while (SourceSwapPage != 0)
+  	{
+		for (i = 0; i < EXTERNAL_TABLE_ENTRY_NUM; i++)
+		{
+	  		DestinationSwapPage->entryList[i] = SourceSwapPage->entryList[i];
+		}
+		DestinationSwapPage = DestinationSwapPage->nxt;
+		SourceSwapPage = SourceSwapPage->nxt;
+  	}
+  	return 0;
 }
-
-/*
-描述：清理一页交换表
-参数：一页表的地址，是否清理链接
-返回：无
-*/
-// void ClearSwapPage(struct SwapTablePage *CurrentPage, uint WhetherClearLink)
-// {
-// 	int i;
-// 	for (i = 0; i < SWAP_TABLE_ENTRY_NUM; i++)
-// 	{
-// 		CurrentPage->EntryList[i].VirtualAddress = SLOT_USABLE;
-// 	}
-// 	if (WhetherClearLink)
-// 	{
-// 		CurrentPage->Next = 0;
-// 		CurrentPage->Last = 0;
-// 	}
-// }
-
-/*
-描述：生成一页交换表
-参数：无
-返回：一页表
-*/
-// struct SwapTablePage* AllocSwapPage(void)
-// {
-// 	struct SwapTablePage *NewPage;
-// 	if ((NewPage = (struct SwapTablePage *)kalloc()) == 0)
-// 	{
-// 		return 0;
-// 	}
-// 	ClearSwapPage(NewPage, 1);
-// 	return NewPage;
-// }
-
-/*
-描述：清理一个进程的交换表
-参数：进程
-返回：无
-*/
-// void ClearSwapTable(struct proc *CurrentProcess)
-// {
-//   	struct SwapTablePage *CurrentPage;
-//   	CurrentPage = CurrentProcess->SwapTableListHead;
-// 	while (CurrentPage != 0)
-//   	{
-// 		ClearSwapPage(CurrentPage, 0);
-// 		CurrentPage = CurrentPage->Next;
-//   	}
-// }
-
-/*
-描述：分配一个进程的内存表
-参数：进程
-返回：成功0失败-1
-*/
-// int GrowSwapTable(struct proc *CurrentProcess)
-// {
-//   	struct SwapTablePage **head, **tail;
-//   	head = &(CurrentProcess->SwapTableListHead);
-//   	tail = &(CurrentProcess->SwapTableListTail);
-  
-//   	if (*head == 0)
-//   	{
-// 		if ((*head = AllocSwapPage()) == 0)
-// 		{
-// 			return -1;
-// 		}
-// 		*tail = *head;
-//   	}
-//   	else
-//   	{
-// 		struct SwapTablePage *temp = *tail;
-// 		if ((*tail = AllocSwapPage()) == 0)
-// 		{
-// 			return -1;
-// 		}
-// 		temp->Next = *tail;
-// 		(*tail)->Last = temp;
-//   	}
-
-//   	return 0;
-// }
-
-/*
-描述：复制交换表和交换文件等
-参数：目的地，源
-返回：成功0失败-1
-*/
-// int CopyVirtualMemoryData(struct proc *Destination, struct proc *Source)
-// {
-// 	//复制交换表
-//   	ClearMemoryTable(Destination);
-//   	Destination->MemoryEntryNum = Source->MemoryEntryNum;
-//   	Destination->MemoryListHead = 0;
-//   	Destination->MemoryListTail = 0;
-
-//   	struct MemoryTablePage *CurrentDestinationPage = Destination->MemoryTableListHead;
-//   	int DestinationEntryNum = 0;
-//   	struct MemoryTableEntry *CurrentSourceEntry = Source->MemoryListHead;
-//   	struct MemoryTableEntry *PreviousDestinationEntry = 0;
-
-//   	if (CurrentSourceEntry != 0)
-//   	{
-// 		Destination->MemoryListHead = &(CurrentDestinationPage->EntryList[DestinationEntryNum]);
-//   	}
-//   	while (CurrentSourceEntry != 0)
-//   	{
-// 		if (PreviousDestinationEntry != 0)
-// 		{
-// 	  		PreviousDestinationEntry->Next = &(CurrentDestinationPage->EntryList[DestinationEntryNum]);
-// 		}
-// 		CurrentDestinationPage->EntryList[DestinationEntryNum].Last = PreviousDestinationEntry;
-// 		PreviousDestinationEntry = &(CurrentDestinationPage->EntryList[DestinationEntryNum]);
-// 		CurrentDestinationPage->EntryList[DestinationEntryNum].VirtualAddress = CurrentSourceEntry->VirtualAddress;
-
-// 		CurrentSourceEntry = CurrentSourceEntry->Next;
-// 		DestinationEntryNum++;
-
-// 		if (DestinationEntryNum == MEMORY_TABLE_ENTRY_NUM)
-// 		{
-// 	  		CurrentDestinationPage = CurrentDestinationPage->Next;
-// 	  		DestinationEntryNum = 0;
-// 		}
-//   	}
-//   	Destination->MemoryListTail = PreviousDestinationEntry;
-
-// 	//复制交换表
-//   	int i;
-//   	struct SwapTablePage *SourceSwapPage, *DestinationSwapPage;
-//   	while (Source->SwapPageNum > Destination->SwapPageNum)
-//   	{
-// 		if (GrowSwapTable(Destination) == 0)
-// 		{
-// 	  	return -1;
-// 		}
-// 		Destination->SwapPageNum ++;
-//   	}
-
-//   	SourceSwapPage = Source->SwapTableListHead;
-//   	DestinationSwapPage = Destination->SwapTableListHead;
-//   	while (SourceSwapPage != 0)
-//   	{
-// 		for (i = 0; i < SWAP_TABLE_ENTRY_NUM; i++)
-// 		{
-// 	  	DestinationSwapPage->EntryList[i] = SourceSwapPage->EntryList[i];
-// 		}
-// 		DestinationSwapPage = DestinationSwapPage->Next;
-// 		SourceSwapPage = SourceSwapPage->Next;
-//   	}
-//   	return 0;
-// }

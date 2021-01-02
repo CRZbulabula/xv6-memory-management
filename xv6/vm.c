@@ -319,6 +319,74 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 	return 0;
 }
 
+/*
+描述：内存满了的时候，把内存优先级最低的地方扔到交换表里
+参数：当前进程
+返回：优先级最低的内存entry指针
+*/
+// 当内部存储耗尽，将优先级最低的内部存储项移交至外部存储，并返回空出的内部存储位
+struct internalMemoryEntry* getSwapEntry()
+{
+	// 获取优先级最低的内存表项（队尾）
+	struct internalMemoryEntry* curTail = getlastInternalEntry(proc);
+
+	// 获取一个空的外存表
+	struct externalMemoryPlace externalPlace = getEmptyExternalPlace(proc);
+	struct externalMemoryEntry* externalEntry = externalPlace.Entry;
+	int fileOffset = externalPlace.Offset;
+
+	//修改交换表和外存
+	externalEntry->virtualAddress = curTail->virtualAddress;
+	if (writeExternalFile((char *)PTE_ADDR(curTail->virtualAddress), fileOffset, PGSIZE) == 0)
+	{
+		return 0;
+	}
+	pte_t* curPageTable;
+
+	//修改对应页表
+	curPageTable = walkpgdir(proc->pgdir, (void *)curTail->virtualAddress, 0);
+	if (!(*curPageTable))
+		panic("error: FIFO write PTE empty.");
+	kfree((char *)(P2V_WO(PTE_ADDR(*curPageTable))));
+	*curPageTable = PTE_W | PTE_U | PTE_PO;
+	lcr3(V2P(proc->pgdir));
+
+	cprintf("swap a page.\n");
+	return curTail;
+}
+
+void insertEntry(char *newvirtualAddress)
+{
+	int i = 0;
+	struct internalMemoryTable *curPage = proc->internalEntryHead;
+
+	while (curPage != 0)
+	{
+		for (i = 0; i < INTERNAL_TABLE_ENTRY_NUM; i++)
+		{
+			if (curPage->entryList[i].virtualAddress == SLOT_USABLE)
+			{
+				curPage->entryList[i].virtualAddress = newvirtualAddress;
+				curPage->entryList[i].nxt = proc->internalEntryHead;
+				if (proc->internalEntryHead == 0)
+				{
+					proc->internalEntryHead = &(curPage->entryList[i]);
+					proc->internalEntryTail = &(curPage->entryList[i]);
+				}
+				else
+				{
+					proc->internalEntryHead->pre = &(curPage->entryList[i]);
+					proc->internalEntryHead = &(curPage->entryList[i]);
+				}
+				return;
+			}
+		}
+		curPage = curPage -> nxt;
+	}
+	panic("error: cannot insert entry.");
+	proc->internalEntryCnt++;
+}
+
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
@@ -326,7 +394,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
 	char *mem;
 	uint a;
-	struct proc* curProcess = myproc();
 
 	if(newsz >= KERNBASE)
 		return 0;
@@ -335,12 +402,12 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
 	a = PGROUNDUP(oldsz);
 	for(; a < newsz; a += PGSIZE) {
-		if (curProcess->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
-			struct internalMemoryEntry* lastEntry = getLastEntry(curProcess);
-			setInternalHead(curProcess, lastEntry, (char*)a);
+		if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
+			struct internalMemoryEntry* lastEntry = getSwapEntry();
+			setInternalHead(proc, lastEntry, (char*)a);
 		}
 		else {
-			insertEntry(curProcess, (char*)a);
+			insertEntry((char*)a);
 		}
 
 		mem = kalloc();
@@ -364,7 +431,6 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
 	pte_t *pte;
 	uint a, pa;
-	struct proc* curProcess = myproc();
 
 	if(newsz >= oldsz)
 		return oldsz;
@@ -378,16 +444,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			pa = PTE_ADDR(*pte);
 			if(pa == 0)
 				panic("kfree");
-			//struct internalMemoryEntry* internalEntry = getInternalEntry(curProcess, (char*)a);
-			deleteInternalEntry(curProcess, (char*)a);
-			curProcess->internalEntryCnt--;
+			deleteInternalEntry(proc, (char*)a);
 			char *v = p2v(pa);
 			kfree(v);
 			*pte = 0;
 		}
-		else {
-			deleteExternalEntry(curProcess, (char*)a);
-			curProcess->externalEntryCnt--;
+		else if ((*pte & PTE_PO) && proc->pgdir == pgdir) {
+			deleteExternalEntry(proc, (char*)a);
 		}
 	}
 	return newsz;

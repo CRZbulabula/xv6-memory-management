@@ -116,6 +116,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            InitVirtualMemoryData();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -176,6 +177,22 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+
+// fs.c 虚拟内存读写
+int             initExternalFiles(struct proc *curProcess);
+int             clearExternalFiles(struct proc *curProcess);
+int             readExternalFile(struct proc *curProcess, char *buf, uint offset, uint size);
+int             writeExternalFile(struct proc *curProcess, char *buf, uint offset, uint size);
+
+// VirtualMemory.c
+struct          internalMemoryEntry* getlastInternalEntry(struct proc*);
+struct          externalMemoryPlace getEmptyExternalPlace(struct proc*);
+void            setInternalHead(struct proc *CurrentProcess, struct internalMemoryEntry*, char*);
+void            deleteInternalEntry(struct proc*, struct internalMemoryEntry*);
+void            deleteExternalEntry(struct proc*, char*);
+void            clearExternalList(struct proc*);
+void            clearInternalList(struct proc*);
+int             copyInternalMemory(struct proc *, struct proc *);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

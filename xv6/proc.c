@@ -158,19 +158,24 @@ userinit(void)
 int
 growproc(int n)
 {
-	uint sz;
-	
-	sz = proc->sz;
-	if(n > 0){
-		if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
-			return -1;
-	} else if(n < 0){
-		if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
-			return -1;
-	}
-	proc->sz = sz;
-	switchuvm(proc);
-	return 0;
+  uint sz;
+  
+  sz = proc->sz;
+
+  if (sz + n > KERNBASE - proc->stackSize - PGSIZE){
+    return -1;
+  }
+
+  if(n > 0){
+    if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
+      return -1;
+  } else if(n < 0){
+    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
+      return -1;
+  }
+  proc->sz = sz;
+  switchuvm(proc);
+  return 0;
 }
 
 // Create a new process copying p as the parent.
@@ -179,30 +184,33 @@ growproc(int n)
 int
 fork(void)
 {
-	int i, pid;
-	struct proc *np;
+  int i, pid;
+  struct proc *np;
 
-	// Allocate process.
-	if((np = allocproc()) == 0)
-		return -1;
-	// Copy process state from p.
-	if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
-		kfree(np->kstack);
-		np->kstack = 0;
-		np->state = UNUSED;
-		return -1;
-	}
-	np->sz = proc->sz;
-	np->parent = proc;
-	*np->tf = *proc->tf;
+  // Allocate process.
+  if((np = allocproc()) == 0)
+    return -1;
 
-	// Clear %eax so that fork returns 0 in the child.
-	np->tf->eax = 0;
+  // Copy process state from p.
+  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = proc->sz;
+  np->stackSize = proc->stackSize;
 
-	for(i = 0; i < NOFILE; i++)
-		if(proc->ofile[i])
-			np->ofile[i] = filedup(proc->ofile[i]);
-	np->cwd = idup(proc->cwd);
+  np->parent = proc;
+  *np->tf = *proc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(proc->ofile[i])
+      np->ofile[i] = filedup(proc->ofile[i]);
+  np->cwd = idup(proc->cwd);
  
 	pid = np->pid;
 	safestrcpy(np->name, proc->name, sizeof(proc->name));

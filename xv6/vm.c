@@ -382,6 +382,23 @@ void insertEntry(char *newVirtualAddress)
 	panic("error: cannot insert entry.");
 }
 
+/*
+在内存页表记录新分配的虚拟地址
+*/
+void recordPage(char* virtualAddr)
+{
+	insertEntry(virtualAddr);
+}
+
+/*
+把内存优先级最低的放到外存
+*/
+struct internalMemoryEntry* recordFile(void)
+{
+	cprintf("Put out a page.\n");
+	return getSwapEntry();
+}
+
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
@@ -420,6 +437,35 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	return newsz;
 }
 
+int stackIncre(pde_t *pgdir)
+{
+	uint stackBottom = KERNBASE - proc->stackSize;
+	uint heapTop = proc->sz;
+	if (heapTop > stackBottom - PGSIZE) {
+		return 0;
+	}
+	char* newVirtualPage = kalloc();
+	if (newVirtualPage == 0) {
+		return 0;
+	}
+	uint newPysicalPage = V2P(newVirtualPage);
+	uint newStackBottom = stackBottom - PGSIZE;
+	if (mappages(pgdir, (char*)newStackBottom, PGSIZE, newPysicalPage, PTE_W|PTE_U) < 0) {
+		deallocuvm(pgdir, newStackBottom, stackBottom);
+		kfree(newVirtualPage);
+		return 0;
+	}
+	if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
+		struct internalMemoryEntry* tail = recordFile();
+		setInternalHead(proc, tail, (char*)newStackBottom);
+	} else {
+		recordPage((char*)newStackBottom);
+	}
+	memset(newVirtualPage, 0, PGSIZE);
+	proc->stackSize += PGSIZE;
+	return 1;
+}
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -455,4 +501,10 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 		}
 	}
 	return newsz;
+}
+
+// 缺页中断处理
+pageFault(uint err)
+{
+
 }

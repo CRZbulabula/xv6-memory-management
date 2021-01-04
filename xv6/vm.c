@@ -319,11 +319,6 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 	return 0;
 }
 
-/*
-描述：内存满了的时候，把内存优先级最低的地方扔到交换表里
-参数：当前进程
-返回：优先级最低的内存entry指针
-*/
 // 当内部存储耗尽，将优先级最低的内部存储项移交至外部存储，并返回空出的内部存储位
 struct internalMemoryEntry* getSwapEntry()
 {
@@ -337,7 +332,7 @@ struct internalMemoryEntry* getSwapEntry()
 
 	//修改交换表和外存
 	externalEntry->virtualAddress = curTail->virtualAddress;
-	if (writeExternalFile((char *)PTE_ADDR(curTail->virtualAddress), fileOffset, PGSIZE) == 0)
+	if (writeExternalFile(proc, (char *)PTE_ADDR(curTail->virtualAddress), fileOffset, PGSIZE) == 0)
 	{
 		return 0;
 	}
@@ -351,14 +346,14 @@ struct internalMemoryEntry* getSwapEntry()
 	*curPageTable = PTE_W | PTE_U | PTE_PO;
 	lcr3(V2P(proc->pgdir));
 
-	cprintf("swap a page.\n");
+	//cprintf("swap a page.\n");
 	return curTail;
 }
 
-void insertEntry(char *newvirtualAddress)
+void insertEntry(char *newVirtualAddress)
 {
 	int i = 0;
-	struct internalMemoryTable *curPage = proc->internalEntryHead;
+	struct internalMemoryTable *curPage = proc->internalTableHead;
 
 	while (curPage != 0)
 	{
@@ -366,7 +361,7 @@ void insertEntry(char *newvirtualAddress)
 		{
 			if (curPage->entryList[i].virtualAddress == SLOT_USABLE)
 			{
-				curPage->entryList[i].virtualAddress = newvirtualAddress;
+				curPage->entryList[i].virtualAddress = newVirtualAddress;
 				curPage->entryList[i].nxt = proc->internalEntryHead;
 				if (proc->internalEntryHead == 0)
 				{
@@ -378,13 +373,13 @@ void insertEntry(char *newvirtualAddress)
 					proc->internalEntryHead->pre = &(curPage->entryList[i]);
 					proc->internalEntryHead = &(curPage->entryList[i]);
 				}
+				proc->internalEntryCnt++;
 				return;
 			}
 		}
-		curPage = curPage -> nxt;
+		curPage = curPage->nxt;
 	}
 	panic("error: cannot insert entry.");
-	proc->internalEntryCnt++;
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to
@@ -401,7 +396,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 		return oldsz;
 
 	a = PGROUNDUP(oldsz);
+
 	for(; a < newsz; a += PGSIZE) {
+		//cprintf("grow vm to: %d\n", a);
+		if (a % (1024 * 1024) == 0) cprintf("grow vm to: %dMB\n", a / 1024 / 1024);
 		if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
 			struct internalMemoryEntry* lastEntry = getSwapEntry();
 			setInternalHead(proc, lastEntry, (char*)a);
@@ -444,7 +442,10 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			pa = PTE_ADDR(*pte);
 			if(pa == 0)
 				panic("kfree");
-			deleteInternalEntry(proc, (char*)a);
+			if (proc->pgdir == pgdir)
+			{
+				deleteInternalEntry(proc, (char*)a);
+			}
 			char *v = p2v(pa);
 			kfree(v);
 			*pte = 0;

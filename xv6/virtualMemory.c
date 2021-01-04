@@ -17,24 +17,30 @@
 struct internalMemoryEntry* getlastInternalEntry(struct proc *curProcess)
 {
 	struct internalMemoryEntry *curTail;
-	curTail = curProcess->internalTableTail;
-	if (curTail == 0 || curTail->pre == 0)
+	curTail = curProcess->internalEntryTail;
+	if (curTail == 0)
 	{
 		panic("error: The last entry of internal memory is NULL!");
 	}
-	curProcess->internalTableTail = curTail->pre;
-	curTail->pre->nxt = 0;
+	curProcess->internalEntryTail = curTail->pre;
+	if (curTail->pre != 0)
+	{
+		curTail->pre->nxt = 0;
+	}
 	curTail->pre = 0;
 	return curTail;
 }
 
 // 更新内存表项并置为表头
-void setInternalHead(struct proc *curProcess, struct internalMemoryEntry* curEntry, char* TheVirtualAddress)
+void setInternalHead(struct proc *curProcess, struct internalMemoryEntry* newHead, char* newVirtualAddress)
 {
-	curEntry->nxt = curProcess->internalEntryHead;
-	curProcess->internalEntryHead->pre = curEntry;
-	curProcess->internalEntryHead = curEntry;
-	curEntry->virtualAddress = TheVirtualAddress;
+	newHead->nxt = curProcess->internalEntryHead;
+	if (curProcess->internalEntryHead != 0)
+	{
+		curProcess->internalEntryHead->pre = newHead;
+	}
+	curProcess->internalEntryHead = newHead;
+	newHead->virtualAddress = newVirtualAddress;
 }
 
 // 移除一个外存表项
@@ -79,6 +85,7 @@ void deleteInternalEntry(struct proc *curProcess, char* delVirtualAddress)
 		struct internalMemoryEntry *newHead = curProcess->internalEntryHead->nxt;
 		curProcess->internalEntryHead->nxt = 0;
 		curProcess->internalEntryHead = newHead;
+		curProcess->internalEntryCnt--;
 	}
 	else
 	{
@@ -106,12 +113,14 @@ void deleteInternalEntry(struct proc *curProcess, char* delVirtualAddress)
 					curEntry->pre = 0;
 					curEntry->nxt = 0;
 					curProcess->internalEntryCnt--;
+					cprintf("proc: %d delete %d\n", curProcess->pid, delVirtualAddress);
 					return;
 				}
 			}
 			curPage = curPage->nxt;
 			pageCnt++;
 		}
+		cprintf("target: %d cnt: %d\n", delVirtualAddress, curProcess->internalEntryCnt);
 		panic("delete error: cannot find internal entry!");
 	}
 }
@@ -302,9 +311,9 @@ int copyInternalMemory(struct proc *src, struct proc *dst)
 {
 	//复制交换表
   	clearInternalList(dst);
-  	dst->internalTableHead = 0;
-  	dst->internalTableTail = 0;
-  	dst->internalEntryCnt = src->externalEntryCnt;
+  	dst->internalEntryHead = 0;
+  	dst->internalEntryTail = 0;
+  	dst->internalEntryCnt = src->internalEntryCnt;
 
   	int dstEntryCnt = 0;
   	struct internalMemoryTable *curDstPage = dst->internalTableHead;
@@ -313,7 +322,7 @@ int copyInternalMemory(struct proc *src, struct proc *dst)
 
   	if (curSrcEntry != 0)
   	{
-		dst->internalTableHead = &(curDstPage->entryList[dstEntryCnt]);
+		dst->internalEntryHead = &(curDstPage->entryList[dstEntryCnt]);
   	}
   	while (curSrcEntry != 0)
   	{
@@ -332,7 +341,7 @@ int copyInternalMemory(struct proc *src, struct proc *dst)
 	  		dstEntryCnt = 0;
 		}
   	}
-  	dst->internalTableTail = preDstEntry;
+  	dst->internalEntryTail = preDstEntry;
 
 	//复制交换文件
   	int i;

@@ -77,8 +77,8 @@ struct proc {
   struct internalMemoryEntry *internalEntryTail;
 
   // 外存页表
-  struct externalTablePage *externalListHead;
-  struct externalTablePage *externalListTail;
+  struct externalMemoryPlace *externalListHead;
+  struct externalMemoryPlace *externalListTail;
 
   struct file *externalFiles[EXTERNAL_FILE_MAX_NUM];
 

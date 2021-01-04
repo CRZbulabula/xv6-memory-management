@@ -662,7 +662,7 @@ int initExternalFiles(struct proc *curProcess)
 		itoa(i, path + 7);
 		itoa(curProcess->pid, path + 8);
 
-		begin_op();
+		begin_trans();
 		in = create(path, T_FILE, 0, 0);
 		iunlock(in);
 
@@ -676,7 +676,7 @@ int initExternalFiles(struct proc *curProcess)
 		curProcess->externalFiles[i]->off = 0;
 		curProcess->externalFiles[i]->readable = O_WRONLY;
 		curProcess->externalFiles[i]->writable = O_RDWR;
-		end_op();
+		commit_trans();
 	}
 
   return 0;
@@ -699,10 +699,10 @@ int clearExternalFiles(struct proc *curProcess)
 		}
 		fileclose(curProcess->externalFiles[i]);
 
-		if (kunlink(path) == -1)
+		/*if (kunlink(path) == -1)
 		{
 			return -1;
-		}
+		}*/
 	}
 
 	return 0;

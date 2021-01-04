@@ -116,6 +116,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            showProcInfo();
 void            InitVirtualMemoryData();
 
 // swtch.S
@@ -138,6 +139,7 @@ char*           safestrcpy(char*, const char*, int);
 int             strlen(const char*);
 int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
+void            itoa(int, char *);
 
 // syscall.c
 int             argint(int, int*);
@@ -146,6 +148,9 @@ int             argstr(int, char**);
 int             fetchint(uint, int*);
 int             fetchstr(uint, char**);
 void            syscall(void);
+
+// sysfile.c
+struct          inode* create(char *, short, short, short);
 
 // timer.c
 void            timerinit(void);
@@ -188,9 +193,10 @@ int             writeExternalFile(struct proc *curProcess, char *buf, uint offse
 struct          internalMemoryEntry* getlastInternalEntry(struct proc*);
 struct          externalMemoryPlace getEmptyExternalPlace(struct proc*);
 void            setInternalHead(struct proc *CurrentProcess, struct internalMemoryEntry*, char*);
-void            deleteInternalEntry(struct proc*, struct internalMemoryEntry*);
+void            deleteInternalEntry(struct proc*, char*);
 void            deleteExternalEntry(struct proc*, char*);
 void            clearExternalList(struct proc*);
+void            allocInternalList(struct proc*);
 void            clearInternalList(struct proc*);
 int             copyInternalMemory(struct proc *, struct proc *);
 

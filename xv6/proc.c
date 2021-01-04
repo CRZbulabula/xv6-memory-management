@@ -51,6 +51,18 @@ void InitVirtualMemoryData()
   release(&ptable.lock);
 }
 
+void showProcInfo(struct proc *curProcess)
+{
+	cprintf("Process ID: %d\n", curProcess->pid);
+	cprintf("Process state: %d\n", curProcess->state);
+	cprintf("process memory: %d bytes\n", curProcess->sz);
+	cprintf("internal memory count: %d\n", curProcess->internalEntryCnt);
+	cprintf("external memory count: %d\n", curProcess->externalEntryCnt);
+	cprintf("internal memory entry head: %p\n", curProcess->internalEntryHead);
+	cprintf("internal memory list head: %p\n", curProcess->internalTableHead);
+	cprintf("external memory list head: %p\n", curProcess->externalListHead);
+}
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -173,7 +185,6 @@ fork(void)
 	// Allocate process.
 	if((np = allocproc()) == 0)
 		return -1;
-
 	// Copy process state from p.
 	if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
 		kfree(np->kstack);
@@ -202,7 +213,8 @@ fork(void)
 	int offset = 0;
 	int nread = 0;
 
-	if (kstrcmp(proc->name, "init") != 0 && kstrcmp(proc->name, "sh") != 0)
+	int name_length = strlen(proc->name);
+	if (strncmp(proc->name, "init", name_length) != 0 && strncmp(proc->name, "sh", name_length) != 0)
 	{
 		offset = 0;
 		nread = 0;

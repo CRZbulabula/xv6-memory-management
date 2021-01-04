@@ -5,10 +5,10 @@ void*
 memset(void *dst, int c, uint n)
 {
   if ((int)dst%4 == 0 && n%4 == 0){
-    c &= 0xFF;
-    stosl(dst, (c<<24)|(c<<16)|(c<<8)|c, n/4);
+	c &= 0xFF;
+	stosl(dst, (c<<24)|(c<<16)|(c<<8)|c, n/4);
   } else
-    stosb(dst, c, n);
+	stosb(dst, c, n);
   return dst;
 }
 
@@ -20,9 +20,9 @@ memcmp(const void *v1, const void *v2, uint n)
   s1 = v1;
   s2 = v2;
   while(n-- > 0){
-    if(*s1 != *s2)
-      return *s1 - *s2;
-    s1++, s2++;
+	if(*s1 != *s2)
+	  return *s1 - *s2;
+	s1++, s2++;
   }
 
   return 0;
@@ -37,13 +37,13 @@ memmove(void *dst, const void *src, uint n)
   s = src;
   d = dst;
   if(s < d && s + n > d){
-    s += n;
-    d += n;
-    while(n-- > 0)
-      *--d = *--s;
+	s += n;
+	d += n;
+	while(n-- > 0)
+	  *--d = *--s;
   } else
-    while(n-- > 0)
-      *d++ = *s++;
+	while(n-- > 0)
+	  *d++ = *s++;
 
   return dst;
 }
@@ -59,9 +59,9 @@ int
 strncmp(const char *p, const char *q, uint n)
 {
   while(n > 0 && *p && *p == *q)
-    n--, p++, q++;
+	n--, p++, q++;
   if(n == 0)
-    return 0;
+	return 0;
   return (uchar)*p - (uchar)*q;
 }
 
@@ -72,9 +72,9 @@ strncpy(char *s, const char *t, int n)
   
   os = s;
   while(n-- > 0 && (*s++ = *t++) != 0)
-    ;
+	;
   while(n-- > 0)
-    *s++ = 0;
+	*s++ = 0;
   return os;
 }
 
@@ -86,9 +86,9 @@ safestrcpy(char *s, const char *t, int n)
   
   os = s;
   if(n <= 0)
-    return os;
+	return os;
   while(--n > 0 && (*s++ = *t++) != 0)
-    ;
+	;
   *s = 0;
   return os;
 }
@@ -99,7 +99,28 @@ strlen(const char *s)
   int n;
 
   for(n = 0; s[n]; n++)
-    ;
+	;
   return n;
 }
 
+void itoa(int n, char *p)
+{
+	if (n < 0)
+	{
+		n *= -1;
+		*p++ = '-';
+	}
+
+	int i, len = 0, x = n;
+	while (x)
+	{
+		x /= 10;
+		++len;
+	}
+	p[len] = '\0';
+	for (i = len - 1; i >= 0; i--)
+	{
+		p[i] = n % 10 + '0';
+		n /= 10;
+	}
+}

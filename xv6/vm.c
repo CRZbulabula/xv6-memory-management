@@ -418,7 +418,7 @@ void swapPage(uint swapVirtualAddress)
 	cprintf("swap buffer: %d\n", bufferCnt);
 	
 	//writeExternalFile(proc, (char *)(PTE_ADDR(*PageTableMemory)), FileOffset, PGSIZE);
-	memmove((void *)(PTE_ADDR(swapVirtualAddress)), (void *)SwapBuffer, PGSIZE);
+	memmove((void *)(p2v(PTE_ADDR(swapVirtualAddress))), (void *)SwapBuffer, PGSIZE);
 	/*int FileNum = 0;
 	for (FileNum = 0; FileNum < 4; FileNum ++)
 	{

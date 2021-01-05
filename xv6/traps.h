@@ -36,3 +36,12 @@
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
 
+/* 
+  缺页中断时的错误码
+	https://wiki.osdev.org/Exceptions#Page_Fault 中有详细说明
+*/
+#define PGFLT_P          1
+#define PGFLT_WR         2
+#define PGFLT_US         4
+#define PGFLT_RSVD       8
+#define PGFLT_ID        16

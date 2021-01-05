@@ -6,6 +6,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "traps.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -264,6 +265,7 @@ copyuvm(pde_t *pgdir, uint sz)
 			panic("copyuvm: pte should exist");
 		if(!(*pte & PTE_P))
 			panic("copyuvm: page not present");
+		// *pte &= ~PTE_U;
 		pa = PTE_ADDR(*pte);
 		if((mem = kalloc()) == 0)
 			goto bad;
@@ -271,6 +273,22 @@ copyuvm(pde_t *pgdir, uint sz)
 		if(mappages(d, (void*)i, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
 			goto bad;
 	}
+
+	// copy stack
+	for(i = KERNBASE - proc->stackSize; i<KERNBASE; i+=PGSIZE){
+		if ((pte = walkpgdir(pgdir, (void*)i, 0)) == 0)
+			panic("copyuvm: pte should exist");
+		if (!(*pte & PTE_P))
+			panic("copyuvm: page not present");
+		pa = PTE_ADDR(*pte);
+		if((mem = kalloc()) == 0)
+			goto bad;
+		memmove(mem, (char*)p2v(pa), PGSIZE);
+		if (mappages(d, (void*)i, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
+			goto bad;
+	}
+
+	// lcr3(V2P(pgdir));
 	return d;
 
 bad:
@@ -383,14 +401,6 @@ void insertEntry(char *newVirtualAddress)
 }
 
 /*
-在内存页表记录新分配的虚拟地址
-*/
-void recordPage(char* virtualAddr)
-{
-	insertEntry(virtualAddr);
-}
-
-/*
 把内存优先级最低的放到外存
 */
 struct internalMemoryEntry* recordFile(void)
@@ -406,7 +416,9 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
 	char *mem;
 	uint a;
-
+	if (newsz > KERNBASE - proc->stackSize - PGSIZE){
+		return 0;
+	}
 	if(newsz >= KERNBASE)
 		return 0;
 	if(newsz < oldsz)
@@ -415,7 +427,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	a = PGROUNDUP(oldsz);
 
 	for(; a < newsz; a += PGSIZE) {
-		//cprintf("grow vm to: %d\n", a);
 		if (a % (1024 * 1024) == 0) cprintf("grow vm to: %dMB\n", a / 1024 / 1024);
 		if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
 			struct internalMemoryEntry* lastEntry = getSwapEntry();
@@ -432,7 +443,11 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			return 0;
 		}
 		memset(mem, 0, PGSIZE);
-		mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+		if (mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0){
+			deallocuvm(pgdir, newsz, oldsz);
+			kfree(mem);
+			return 0;
+		}
 	}
 	return newsz;
 }
@@ -445,11 +460,12 @@ int stackIncre(pde_t *pgdir)
 		return 0;
 	}
 	char* newVirtualPage = kalloc();
-	if (newVirtualPage == 0) {
-		return 0;
-	}
 	uint newPysicalPage = V2P(newVirtualPage);
 	uint newStackBottom = stackBottom - PGSIZE;
+	if (newVirtualPage == 0) {
+		cprintf("stackIncre newVirtualPage out of memory\n");
+		return 0;
+	}
 	if (mappages(pgdir, (char*)newStackBottom, PGSIZE, newPysicalPage, PTE_W|PTE_U) < 0) {
 		deallocuvm(pgdir, newStackBottom, stackBottom);
 		kfree(newVirtualPage);
@@ -459,7 +475,7 @@ int stackIncre(pde_t *pgdir)
 		struct internalMemoryEntry* tail = recordFile();
 		setInternalHead(proc, tail, (char*)newStackBottom);
 	} else {
-		recordPage((char*)newStackBottom);
+		insertEntry((char*)newStackBottom);
 	}
 	memset(newVirtualPage, 0, PGSIZE);
 	proc->stackSize += PGSIZE;
@@ -504,7 +520,65 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 }
 
 // 缺页中断处理
-pageFault(uint err)
+void pageFault(uint err)
 {
+	uint va = rcr2();
+	if (!(err & PGFLT_P)){
+		pte_t* pte = &proc->pgdir[PDX(va)];
+		if (((*pte) & PTE_P) != 0){
+			if (((uint*)PTE_ADDR(P2V(*pte)))[PTX(va)] & PTE_PO){
+				// TODO:把外存东西拿进内存
+			  // swapEx2In(PTE_ADDR(va));
+				cprintf("外存放进内存\n");
+				return;
+			}
+		}
+		
+		// if (va < PGSIZE){
+		// 	TODO:零指针保护 kill进程
+		// 	cprintf("零指针保护\n");
+		// 	return;
+		// }
 
+		// stack increase
+		uint stackBottom = KERNBASE - proc->stackSize;
+		uint heapTop = proc->sz + PGSIZE;
+		cprintf("PageFault, Stack Increasing.\n");
+		if (va >= heapTop && va < stackBottom) {
+			if (stackIncre(proc->pgdir) == 0){
+				cprintf("error: Stack increase failed. Kill [%s] process.", proc->name);
+				proc->killed = 1;
+			}
+			return;
+		}
+
+		char *mem = kalloc();
+		if (mem == 0){
+			cprintf("Lazy allocation failed: Memory out. Kill [%s] process.\n", proc->name);
+			proc->killed = 1;
+			return;
+		}
+		va = PGROUNDDOWN(va);
+		memset(mem, 0, PGSIZE);
+
+		if (mappages(proc->pgdir, (char*)va, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
+			cprintf("Lazy allocation failed: Memory out(2). Kill [%s] process.\n", proc->name);
+			proc->killed = 1;
+			return;
+		}
+		return;
+	}
+
+	pte_t* pte;
+	if (proc == 0){
+		panic("Pagefault. No process.");
+	}
+	if ((va >= KERNBASE) || (pte = walkpgdir(proc->pgdir, (void*)va, 0) == 0) || !(*pte & PTE_P) || !(*pte & PTE_U)){
+		cprintf("VA Out of Range. va = %d, pte = %x, *pte = %x\n", va, pte, *pte);
+		proc->killed = 1;
+		return;  
+	}
+
+	// TODO: copy on write
+	lcr3(V2P(proc->pgdir));
 }

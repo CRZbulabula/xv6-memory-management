@@ -170,7 +170,6 @@ int growExternalTable(struct proc *curProcess)
   	struct externalMemoryTable **head, **tail;
   	head = &(curProcess->externalListHead);
   	tail = &(curProcess->externalListTail);
-  
   	if (*head == 0)
   	{
 		if ((*head = allocExternalTable()) == 0)
@@ -190,8 +189,33 @@ int growExternalTable(struct proc *curProcess)
 		(*tail)->nxt = tmp;
 		curProcess->externalListTail = *tail;
   	}
-
+	cprintf("head: %p tail: %p\n", curProcess->externalListHead, curProcess->externalListTail);
   	return 0;
+}
+
+// 在外部存储中找到对应位置
+struct externalMemoryPlace GetAddressInSwapTable(struct proc *curProcess, char* virtualAddress)
+{
+	int entryCnt = 0, pageCnt = 0;
+	struct externalMemoryTable *curPage;
+	struct externalMemoryPlace retPlace;
+
+	curPage = curProcess->externalListHead;
+	while (curPage != 0)
+	{
+		for (entryCnt = 0; entryCnt < EXTERNAL_TABLE_ENTRY_NUM; entryCnt++)
+		{
+			if (curPage->entryList[entryCnt].virtualAddress == virtualAddress)
+			{
+				retPlace.Entry = &(curPage->entryList[entryCnt]);
+				retPlace.Offset = pageCnt * EXTERNAL_TABLE_OFFSET + entryCnt * PGSIZE;
+				return retPlace;
+			}
+		}
+		curPage = curPage->nxt;
+		pageCnt++;
+	}
+	panic("error: cannot find specified external place!");
 }
 
 // 在外部存储中找到一个空位

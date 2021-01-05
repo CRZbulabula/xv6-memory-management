@@ -50,8 +50,14 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = proc->sz;
+  cprintf("old proc size: %d\n", proc->sz);
+  cprintf("growproc: %d\n", n);
   if(growproc(n) < 0)
+  {
+    cprintf("growproc wrong\n");
     return -1;
+  }
+  cprintf("new proc size: %d\n", proc->sz);
   return addr;
 }
 

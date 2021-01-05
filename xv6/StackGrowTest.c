@@ -19,8 +19,8 @@ void recursion(int n) {
 
 int main() {
   printf(1, "================================\n");
-  printf(1, "Stack grow test begin. Test by %d recursion.\n");
   int depth = 256;
+  printf(1, "Stack grow test begin. Test by %d recursion.\n", depth);
   recursion(depth);
   printf(1, "Stack grow test finish.\n");
   printf(1, "================================\n");

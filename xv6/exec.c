@@ -37,7 +37,7 @@ exec(char *path, char **argv)
   clearExternalList(proc);
 
   // Load program into memory.
-  sz = 0;
+  sz = PGSIZE;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;

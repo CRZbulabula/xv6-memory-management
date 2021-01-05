@@ -36,8 +36,10 @@
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
 
-// These are bits in error code when a page fault occurs.
-// See https://wiki.osdev.org/Page_Fault for details.
+/* 
+  缺页中断时的错误码
+	https://wiki.osdev.org/Exceptions#Page_Fault 中有详细说明
+*/
 #define PGFLT_P          1
 #define PGFLT_WR         2
 #define PGFLT_US         4

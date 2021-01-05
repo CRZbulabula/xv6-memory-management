@@ -56,7 +56,10 @@ sys_sbrk(void)
   {
     cprintf("growproc wrong\n");
     return -1;
+  if (proc->sz + n > KERNBASE - proc->stackSize - PGSIZE){
+    return -1;
   }
+  proc->sz += n;
   cprintf("new proc size: %d\n", proc->sz);
   return addr;
 }

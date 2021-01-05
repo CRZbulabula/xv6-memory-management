@@ -182,7 +182,8 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
-void            PageFault(uint);
+int							stackIncre(pde_t*);
+void						pageFault(uint);
 
 // fs.c 虚拟内存读写
 int             initExternalFiles(struct proc *curProcess);

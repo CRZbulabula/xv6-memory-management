@@ -69,6 +69,8 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
+  uint stackSize;
+
   // 虚拟内存页表
   struct internalMemoryTable *internalTableHead;
   struct internalMemoryTable *internalTableTail;
@@ -84,7 +86,6 @@ struct proc {
 
   int internalEntryCnt;
   int externalEntryCnt;
-
 };
 
 // Process memory is laid out contiguously, low addresses first:

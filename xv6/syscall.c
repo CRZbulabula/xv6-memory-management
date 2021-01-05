@@ -17,7 +17,9 @@
 int
 fetchint(uint addr, int *ip)
 {
-  if(addr >= proc->sz || addr+4 > proc->sz)
+  if(addr >= proc->sz && addr < proc->tf->esp || 
+     addr+4 > proc->sz && addr < proc->tf->esp ||
+     addr+4 > KERNBASE)
     return -1;
   *ip = *(int*)(addr);
   return 0;
@@ -31,10 +33,16 @@ fetchstr(uint addr, char **pp)
 {
   char *s, *ep;
 
-  if(addr >= proc->sz)
+  if(addr >= proc->sz && addr < proc->tf->esp || (addr > KERNBASE))
     return -1;
   *pp = (char*)addr;
-  ep = (char*)proc->sz;
+  if (addr < proc->sz)
+    ep = (char*)proc->sz;
+  else if (addr >= proc->tf->esp && addr < KERNBASE)
+    ep = (char*)KERNBASE;
+  else
+    return -1;
+    
   for(s = *pp; s < ep; s++)
     if(*s == 0)
       return s - *pp;
@@ -58,7 +66,11 @@ argptr(int n, char **pp, int size)
   
   if(argint(n, &i) < 0)
     return -1;
-  if((uint)i >= proc->sz || (uint)i+size > proc->sz)
+  if((uint)i > KERNBASE ||
+     ((uint)i >= proc->sz && (uint)i < KERNBASE - proc->stackSize) ||
+     ((uint)(i+size) > proc->sz && (i+size) < KERNBASE - proc->stackSize) ||
+     (uint)(i + size) > KERNBASE ||
+     (((uint)i < proc->sz) && (uint)(i + size) >= KERNBASE - proc->stackSize))
     return -1;
   *pp = (char*)i;
   return 0;

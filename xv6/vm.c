@@ -265,7 +265,10 @@ copyuvm(pde_t *pgdir, uint sz)
 		if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
 			panic("copyuvm: pte should exist");
 		if(!(*pte & PTE_P))
-			panic("copyuvm: page not present");
+		{
+			cprintf("not P: %x\n", i);
+			//panic("copyuvm: page not present");
+		}
 		// *pte &= ~PTE_U;
 		pa = PTE_ADDR(*pte);
 		if((mem = kalloc()) == 0)
@@ -444,7 +447,7 @@ void swapPage(uint swapVirtualAddress)
 	cprintf("swap buffer: %d\n", bufferCnt);
 	
 	//writeExternalFile(proc, (char *)(PTE_ADDR(*PageTableMemory)), FileOffset, PGSIZE);
-	memmove((void *)(PTE_ADDR(swapVirtualAddress)), (void *)SwapBuffer, PGSIZE);
+	memmove((void *)(p2v(PTE_ADDR(swapVirtualAddress))), (void *)SwapBuffer, PGSIZE);
 	/*int FileNum = 0;
 	for (FileNum = 0; FileNum < 4; FileNum ++)
 	{
@@ -504,6 +507,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			kfree(mem);
 			cprintf("map < 0\n");
 			return 0;
+		}
 	}
 	cprintf("newsz: %d\n", newsz);
 	return newsz;
@@ -580,7 +584,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 void pageFault(uint err)
 {
 	uint va = rcr2();
-	if (!(err_code & PGFLT_P))
+	if (!(err & PGFLT_P))
 	{
 		pte_t* pte = &proc->pgdir[PDX(va)];
 		if(((*pte) & PTE_P) != 0)
@@ -592,7 +596,6 @@ void pageFault(uint err)
 				return;
 			}
 		}
-	}		
 		// if (va < PGSIZE){
 		// 	TODO:零指针保护 kill进程
 		// 	cprintf("零指针保护\n");

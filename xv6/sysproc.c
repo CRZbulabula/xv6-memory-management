@@ -50,17 +50,18 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = proc->sz;
-  cprintf("old proc size: %d\n", proc->sz);
+  cprintf("old proc size: %x\n", proc->sz);
   cprintf("growproc: %d\n", n);
   if(growproc(n) < 0)
   {
     cprintf("growproc wrong\n");
     return -1;
+  }
   if (proc->sz + n > KERNBASE - proc->stackSize - PGSIZE){
     return -1;
   }
   proc->sz += n;
-  cprintf("new proc size: %d\n", proc->sz);
+  cprintf("new proc size: %x\n", proc->sz);
   return addr;
 }
 

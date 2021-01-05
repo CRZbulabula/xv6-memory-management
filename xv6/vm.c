@@ -260,6 +260,7 @@ copyuvm(pde_t *pgdir, uint sz)
 
 	if((d = setupkvm()) == 0)
 		return 0;
+	// copy heap
 	for(i = 0; i < sz; i += PGSIZE){
 		if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
 			panic("copyuvm: pte should exist");
@@ -416,13 +417,14 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
 	char *mem;
 	uint a;
-	if (newsz > KERNBASE - proc->stackSize - PGSIZE){
-		return 0;
-	}
 	if(newsz >= KERNBASE)
 		return 0;
 	if(newsz < oldsz)
 		return oldsz;
+	// can't alloc addr in stack range
+	if (newsz > KERNBASE - proc->stackSize - PGSIZE){
+		return 0;
+	}
 
 	a = PGROUNDUP(oldsz);
 
@@ -463,7 +465,7 @@ int stackIncre(pde_t *pgdir)
 	uint newPysicalPage = V2P(newVirtualPage);
 	uint newStackBottom = stackBottom - PGSIZE;
 	if (newVirtualPage == 0) {
-		cprintf("stackIncre newVirtualPage out of memory\n");
+		cprintf("stackIncre newVirtualPage out of memory.\n");
 		return 0;
 	}
 	if (mappages(pgdir, (char*)newStackBottom, PGSIZE, newPysicalPage, PTE_W|PTE_U) < 0) {

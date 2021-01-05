@@ -45,6 +45,8 @@ exec(char *path, char **argv)
       continue;
     if(ph.memsz < ph.filesz)
       goto bad;
+    if(ph.vaddr + ph.memsz < ph.vaddr)
+      goto bad;
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
@@ -56,12 +58,16 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  proc->stackSize = 0;
 
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
-    goto bad; 
-  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-  sp = sz;
+  proc->stackSize = 0;
+  if (stackIncre(pgdir) == 0){
+    goto bad;
+  }
+  sp = KERNBASE;
+  // if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+  //   goto bad; 
+  // clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+  // sp = sz;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {

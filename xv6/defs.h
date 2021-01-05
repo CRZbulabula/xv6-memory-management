@@ -194,12 +194,14 @@ int             writeExternalFile(struct proc *curProcess, char *buf, uint offse
 // VirtualMemory.c
 struct          internalMemoryEntry* getlastInternalEntry(struct proc*);
 struct          externalMemoryPlace getEmptyExternalPlace(struct proc*);
+struct          externalMemoryPlace GetAddressInSwapTable(struct proc *, char*);
 void            setInternalHead(struct proc *CurrentProcess, struct internalMemoryEntry*, char*);
 void            deleteInternalEntry(struct proc*, char*);
 void            deleteExternalEntry(struct proc*, char*);
 void            clearExternalList(struct proc*);
 void            allocInternalList(struct proc*);
 void            clearInternalList(struct proc*);
+int             growExternalTable(struct proc*);
 int             copyInternalMemory(struct proc *, struct proc *);
 
 // number of elements in fixed-size array

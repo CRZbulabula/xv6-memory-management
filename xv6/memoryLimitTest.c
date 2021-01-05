@@ -6,7 +6,7 @@ void mem_limit(void)
 {
 	void *m1, *m2;
 	int oneMB = 1 << 20;
-	int pid, ppid, nMB = 0;
+	int pid, ppid, i, nMB = 0;
 
 	printf(1, "mem limit test\n");
 	ppid = getpid();
@@ -20,6 +20,13 @@ void mem_limit(void)
 			printf(1, "cur mem is: %dMB\n", nMB);
 		}
 	}
+	/*for (i = 0; i < 7359; i++)
+	{
+		m2 = malloc(oneMB);
+		*(char**)m2 = m1;
+		m1 = m2;
+	}*/
+	printf(1, "alloc done");
 	while(m1) {
 		m2 = *(char**)m1;
 		free(m1);

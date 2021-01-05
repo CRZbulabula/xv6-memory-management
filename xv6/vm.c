@@ -343,29 +343,28 @@ struct internalMemoryEntry* getSwapEntry()
 {
 	// 获取优先级最低的内存表项（队尾）
 	struct internalMemoryEntry* curTail = getlastInternalEntry(proc);
-
 	// 获取一个空的外存表
 	struct externalMemoryPlace externalPlace = getEmptyExternalPlace(proc);
 	struct externalMemoryEntry* externalEntry = externalPlace.Entry;
 	int fileOffset = externalPlace.Offset;
 
 	//修改交换表和外存
+	cprintf("[ INFO ] Swapping page out 0x%x.\n", curTail->virtualAddress);
 	externalEntry->virtualAddress = curTail->virtualAddress;
-	if (writeExternalFile(proc, (char *)PTE_ADDR(curTail->virtualAddress), fileOffset, PGSIZE) == 0)
+	if (writeExternalFile(proc, (char *)(PTE_ADDR(curTail->virtualAddress)), fileOffset, PGSIZE) == 0)
 	{
 		return 0;
 	}
+	proc->externalEntryCnt++;
 	pte_t* curPageTable;
 
 	//修改对应页表
 	curPageTable = walkpgdir(proc->pgdir, (void *)curTail->virtualAddress, 0);
-	if (!(*curPageTable))
-		panic("error: FIFO write PTE empty.");
-	kfree((char *)(P2V_WO(PTE_ADDR(*curPageTable))));
+	kfree((char *)(p2v(PTE_ADDR(*curPageTable))));
 	*curPageTable = PTE_W | PTE_U | PTE_PO;
 	lcr3(V2P(proc->pgdir));
 
-	//cprintf("swap a page.\n");
+	cprintf("swap a page. %d\n", proc->externalEntryCnt);
 	return curTail;
 }
 
@@ -409,6 +408,61 @@ struct internalMemoryEntry* recordFile(void)
 	cprintf("Put out a page.\n");
 	return getSwapEntry();
 }
+// 把一个外存的虚拟地址和内存优先级最低地址交换
+void swapPage(uint swapVirtualAddress)
+{
+	cprintf("[ INFO ] Swapping page in 0x%x.\n", swapVirtualAddress);
+	char SwapBuffer[PGSIZE];
+	pte_t *PageTableMemory, *PageTableFile;
+	struct internalMemoryEntry* curTail = getSwapEntry();
+
+	//获取外存里的，要进来的
+	struct externalMemoryPlace ThePlace = GetAddressInSwapTable(proc, (char *)PTE_ADDR(swapVirtualAddress));
+	struct externalMemoryEntry* EntryFile = ThePlace.Entry;
+	int FileOffset = ThePlace.Offset;
+
+	//获取对应页表信息
+	// PageTableMemory = walkpgdir(proc->pgdir, (void *)curTail->virtualAddress, 0);
+	// if (!*PageTableMemory)
+	// {
+	// 	panic("[ERROR] A record is in memstab but not in pgdir.");
+	// }
+	PageTableFile = walkpgdir(proc->pgdir, (void *)swapVirtualAddress, 0);
+	if (!*PageTableFile)
+	{
+		panic("[ERROR] A record should be in pgdir!");
+	}
+	*PageTableFile = PTE_ADDR(*PageTableFile) | PTE_U | PTE_W | PTE_P;
+
+	//内外存交换
+	memset(SwapBuffer, 0, PGSIZE);
+	readExternalFile(proc, SwapBuffer, FileOffset, PGSIZE);
+
+	int i, bufferCnt = 0;
+	for (i = 0; i < PGSIZE; i++)
+		bufferCnt += SwapBuffer[i];
+	cprintf("swap buffer: %d\n", bufferCnt);
+	
+	//writeExternalFile(proc, (char *)(PTE_ADDR(*PageTableMemory)), FileOffset, PGSIZE);
+	memmove((void *)(PTE_ADDR(swapVirtualAddress)), (void *)SwapBuffer, PGSIZE);
+	/*int FileNum = 0;
+	for (FileNum = 0; FileNum < 4; FileNum ++)
+	{
+		//swaptable和文件一一对应
+		uint FileStartPlace = FileOffset + (SWAP_BUFFER_SIZE * FileNum);
+		int CurrentWritingOffset = SWAP_BUFFER_SIZE * FileNum;
+		memset(SwapBuffer, 0, SWAP_BUFFER_SIZE);
+		readExternalFile(proc, SwapBuffer, FileStartPlace, SWAP_BUFFER_SIZE);
+		writeExternalFile(proc, (char *)(P2V_WO(PTE_ADDR(*PageTableMemory)) + CurrentWritingOffset), FileStartPlace, SWAP_BUFFER_SIZE);
+		memmove((void *)(PTE_ADDR(swapVirtualAddress) + CurrentWritingOffset), (void *)SwapBuffer, SWAP_BUFFER_SIZE);
+	}*/
+
+	//更新entry,页表
+	EntryFile->virtualAddress = curTail->virtualAddress;
+	setInternalHead(proc, curTail, (char *)PTE_ADDR(swapVirtualAddress));
+	//*PageTableMemory = PTE_U | PTE_W | PTE_PO;
+	lcr3(V2P(proc->pgdir));
+}
 
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
@@ -448,9 +502,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 		if (mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0){
 			deallocuvm(pgdir, newsz, oldsz);
 			kfree(mem);
+			cprintf("map < 0\n");
 			return 0;
-		}
 	}
+	cprintf("newsz: %d\n", newsz);
 	return newsz;
 }
 
@@ -503,13 +558,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 		if(!pte)
 			a += (NPTENTRIES - 1) * PGSIZE;
 		else if((*pte & PTE_P) != 0) {
-			pa = PTE_ADDR(*pte);
-			if(pa == 0)
-				panic("kfree");
 			if (proc->pgdir == pgdir)
 			{
 				deleteInternalEntry(proc, (char*)a);
 			}
+			pa = PTE_ADDR(*pte);
+			if(pa == 0)
+				panic("kfree");
 			char *v = p2v(pa);
 			kfree(v);
 			*pte = 0;
@@ -525,17 +580,19 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 void pageFault(uint err)
 {
 	uint va = rcr2();
-	if (!(err & PGFLT_P)){
+	if (!(err_code & PGFLT_P))
+	{
 		pte_t* pte = &proc->pgdir[PDX(va)];
-		if (((*pte) & PTE_P) != 0){
-			if (((uint*)PTE_ADDR(P2V(*pte)))[PTX(va)] & PTE_PO){
-				// TODO:把外存东西拿进内存
-			  // swapEx2In(PTE_ADDR(va));
-				cprintf("外存放进内存\n");
+		if(((*pte) & PTE_P) != 0)
+		{
+			// 将被置换的页置换回来
+			if(((uint*)PTE_ADDR(P2V(*pte)))[PTX(va)] & PTE_PO) 
+			{
+				swapPage(PTE_ADDR(va));
 				return;
 			}
 		}
-		
+	}		
 		// if (va < PGSIZE){
 		// 	TODO:零指针保护 kill进程
 		// 	cprintf("零指针保护\n");

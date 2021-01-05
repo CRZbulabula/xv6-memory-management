@@ -22,6 +22,14 @@ struct internalMemoryEntry* getlastInternalEntry(struct proc *curProcess)
 	{
 		panic("error: The last entry of internal memory is NULL!");
 	}
+	// while (curTail->virtualAddress <= 10 * 4096)
+	// {
+	// 	curTail->nxt = curProcess->internalEntryHead;
+	// 	curProcess->internalEntryHead->pre = curTail;
+	// 	curTail = curTail->pre;
+	// 	curTail->nxt->pre = 0;
+	// 	curTail->nxt = 0;
+	// }
 	curProcess->internalEntryTail = curTail->pre;
 	if (curTail->pre != 0)
 	{
@@ -189,12 +197,11 @@ int growExternalTable(struct proc *curProcess)
 		(*tail)->nxt = tmp;
 		curProcess->externalListTail = *tail;
   	}
-	cprintf("head: %p tail: %p\n", curProcess->externalListHead, curProcess->externalListTail);
   	return 0;
 }
 
 // 在外部存储中找到对应位置
-struct externalMemoryPlace GetAddressInSwapTable(struct proc *curProcess, char* virtualAddress)
+struct externalMemoryPlace getAddressInExternal(struct proc *curProcess, char* virtualAddress)
 {
 	int entryCnt = 0, pageCnt = 0;
 	struct externalMemoryTable *curPage;

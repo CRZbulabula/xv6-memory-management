@@ -266,8 +266,7 @@ copyuvm(pde_t *pgdir, uint sz)
 			panic("copyuvm: pte should exist");
 		if(!(*pte & PTE_P))
 		{
-			cprintf("not P: %x\n", i);
-			//panic("copyuvm: page not present");
+			panic("copyuvm: page not present");
 		}
 		// *pte &= ~PTE_U;
 		pa = PTE_ADDR(*pte);
@@ -352,7 +351,7 @@ struct internalMemoryEntry* getSwapEntry()
 	int fileOffset = externalPlace.Offset;
 
 	//修改交换表和外存
-	cprintf("[ INFO ] Swapping page out 0x%x.\n", curTail->virtualAddress);
+	//cprintf("[ INFO ] Swapping page out 0x%x.\n", curTail->virtualAddress);
 	externalEntry->virtualAddress = curTail->virtualAddress;
 	if (writeExternalFile(proc, (char *)(PTE_ADDR(curTail->virtualAddress)), fileOffset, PGSIZE) == 0)
 	{
@@ -364,10 +363,10 @@ struct internalMemoryEntry* getSwapEntry()
 	//修改对应页表
 	curPageTable = walkpgdir(proc->pgdir, (void *)curTail->virtualAddress, 0);
 	kfree((char *)(p2v(PTE_ADDR(*curPageTable))));
-	*curPageTable = PTE_W | PTE_U | PTE_PO;
+	//*curPageTable = PTE_W | PTE_U | PTE_PO;
+	*curPageTable ^= (PTE_P | PTE_PO);
 	lcr3(V2P(proc->pgdir));
 
-	cprintf("swap a page. %d\n", proc->externalEntryCnt);
 	return curTail;
 }
 
@@ -414,56 +413,35 @@ struct internalMemoryEntry* recordFile(void)
 // 把一个外存的虚拟地址和内存优先级最低地址交换
 void swapPage(uint swapVirtualAddress)
 {
-	cprintf("[ INFO ] Swapping page in 0x%x.\n", swapVirtualAddress);
+	//cprintf("[ INFO ] Swapping page in 0x%x.\n", swapVirtualAddress);
 	char SwapBuffer[PGSIZE];
-	pte_t *PageTableMemory, *PageTableFile;
+	pte_t *extPTE;
 	struct internalMemoryEntry* curTail = getSwapEntry();
 
-	//获取外存里的，要进来的
-	struct externalMemoryPlace ThePlace = GetAddressInSwapTable(proc, (char *)PTE_ADDR(swapVirtualAddress));
-	struct externalMemoryEntry* EntryFile = ThePlace.Entry;
-	int FileOffset = ThePlace.Offset;
+	struct externalMemoryPlace externalPlace = getAddressInExternal(proc, (char *)PTE_ADDR(swapVirtualAddress));
+	struct externalMemoryEntry* externalEntry = externalPlace.Entry;
+	int fileOffset = externalPlace.Offset;
 
-	//获取对应页表信息
-	// PageTableMemory = walkpgdir(proc->pgdir, (void *)curTail->virtualAddress, 0);
-	// if (!*PageTableMemory)
-	// {
-	// 	panic("[ERROR] A record is in memstab but not in pgdir.");
-	// }
-	PageTableFile = walkpgdir(proc->pgdir, (void *)swapVirtualAddress, 0);
-	if (!*PageTableFile)
+	extPTE = walkpgdir(proc->pgdir, (void *)swapVirtualAddress, 0);
+	if (!*extPTE)
 	{
 		panic("[ERROR] A record should be in pgdir!");
 	}
-	*PageTableFile = PTE_ADDR(*PageTableFile) | PTE_U | PTE_W | PTE_P;
+	*extPTE ^= (PTE_P | PTE_PO);
 
 	//内外存交换
 	memset(SwapBuffer, 0, PGSIZE);
-	readExternalFile(proc, SwapBuffer, FileOffset, PGSIZE);
+	readExternalFile(proc, SwapBuffer, fileOffset, PGSIZE);
 
 	int i, bufferCnt = 0;
 	for (i = 0; i < PGSIZE; i++)
 		bufferCnt += SwapBuffer[i];
-	cprintf("swap buffer: %d\n", bufferCnt);
 	
-	//writeExternalFile(proc, (char *)(PTE_ADDR(*PageTableMemory)), FileOffset, PGSIZE);
-	memmove((void *)(p2v(PTE_ADDR(swapVirtualAddress))), (void *)SwapBuffer, PGSIZE);
-	/*int FileNum = 0;
-	for (FileNum = 0; FileNum < 4; FileNum ++)
-	{
-		//swaptable和文件一一对应
-		uint FileStartPlace = FileOffset + (SWAP_BUFFER_SIZE * FileNum);
-		int CurrentWritingOffset = SWAP_BUFFER_SIZE * FileNum;
-		memset(SwapBuffer, 0, SWAP_BUFFER_SIZE);
-		readExternalFile(proc, SwapBuffer, FileStartPlace, SWAP_BUFFER_SIZE);
-		writeExternalFile(proc, (char *)(P2V_WO(PTE_ADDR(*PageTableMemory)) + CurrentWritingOffset), FileStartPlace, SWAP_BUFFER_SIZE);
-		memmove((void *)(PTE_ADDR(swapVirtualAddress) + CurrentWritingOffset), (void *)SwapBuffer, SWAP_BUFFER_SIZE);
-	}*/
+	memmove((void *)(p2v(PTE_ADDR(*extPTE))), (void *)SwapBuffer, PGSIZE);
 
 	//更新entry,页表
-	EntryFile->virtualAddress = curTail->virtualAddress;
+	externalEntry->virtualAddress = curTail->virtualAddress;
 	setInternalHead(proc, curTail, (char *)PTE_ADDR(swapVirtualAddress));
-	//*PageTableMemory = PTE_U | PTE_W | PTE_PO;
 	lcr3(V2P(proc->pgdir));
 }
 
@@ -484,9 +462,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	}
 
 	a = PGROUNDUP(oldsz);
-
 	for(; a < newsz; a += PGSIZE) {
-		if (a % (1024 * 1024) == 0) cprintf("grow vm to: %dMB\n", a / 1024 / 1024);
 		if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
 			struct internalMemoryEntry* lastEntry = getSwapEntry();
 			setInternalHead(proc, lastEntry, (char*)a);
@@ -509,7 +485,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			return 0;
 		}
 	}
-	cprintf("newsz: %d\n", newsz);
 	return newsz;
 }
 
@@ -611,6 +586,7 @@ void pageFault(uint err)
 				cprintf("error: Stack increase failed. Kill [%s] process.", proc->name);
 				proc->killed = 1;
 			}
+			lcr3(V2P(proc->pgdir));
 			return;
 		}
 

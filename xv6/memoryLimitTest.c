@@ -12,20 +12,21 @@ void mem_limit(void)
 	ppid = getpid();
 	if((pid = fork()) == 0) {
 	m1 = 0;
-	while((m2 = malloc(oneMB)) != 0) {
+	/*while((m2 = malloc(oneMB)) != 0) {
 		++nMB;
 		*(char**)m2 = m1;
 		m1 = m2;
 		if (nMB % 10 == 0) {
 			printf(1, "cur mem is: %dMB\n", nMB);
 		}
-	}
-	/*for (i = 0; i < 7359; i++)
+	}*/
+	for (i = 0; i < 40; i++)
 	{
 		m2 = malloc(oneMB);
+		printf(1, "cur memory is: %dMB\n", i + 1);
 		*(char**)m2 = m1;
 		m1 = m2;
-	}*/
+	}
 	printf(1, "alloc done");
 	while(m1) {
 		m2 = *(char**)m1;

@@ -194,7 +194,7 @@ int             writeExternalFile(struct proc *curProcess, char *buf, uint offse
 // VirtualMemory.c
 struct          internalMemoryEntry* getlastInternalEntry(struct proc*);
 struct          externalMemoryPlace getEmptyExternalPlace(struct proc*);
-struct          externalMemoryPlace GetAddressInSwapTable(struct proc *, char*);
+struct          externalMemoryPlace getAddressInExternal(struct proc *, char*);
 void            setInternalHead(struct proc *CurrentProcess, struct internalMemoryEntry*, char*);
 void            deleteInternalEntry(struct proc*, char*);
 void            deleteExternalEntry(struct proc*, char*);

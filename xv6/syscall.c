@@ -66,7 +66,8 @@ argptr(int n, char **pp, int size)
   
   if(argint(n, &i) < 0)
     return -1;
-  if((uint)i > KERNBASE ||
+  if((uint)i < PGSIZE || // null pointer protect
+     (uint)i > KERNBASE ||
      ((uint)i >= proc->sz && (uint)i < KERNBASE - proc->stackSize) ||
      ((uint)(i+size) > proc->sz && (i+size) < KERNBASE - proc->stackSize) ||
      (uint)(i + size) > KERNBASE ||

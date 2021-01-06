@@ -261,7 +261,7 @@ copyuvm(pde_t *pgdir, uint sz)
 	if((d = setupkvm()) == 0)
 		return 0;
 	// copy heap
-	for(i = 0; i < sz; i += PGSIZE){
+	for(i = PGSIZE; i < sz; i += PGSIZE){
 		if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
 			panic("copyuvm: pte should exist");
 		if(!(*pte & PTE_P))
@@ -291,11 +291,12 @@ copyuvm(pde_t *pgdir, uint sz)
 			goto bad;
 	}
 
-	// lcr3(V2P(pgdir));
+	lcr3(V2P(pgdir));
 	return d;
 
 bad:
 	freevm(d);
+	lcr3(V2P(pgdir));
 	return 0;
 }
 
@@ -496,12 +497,12 @@ int stackIncre(pde_t *pgdir)
 		return 0;
 	}
 	char* newVirtualPage = kalloc();
-	uint newPysicalPage = V2P(newVirtualPage);
-	uint newStackBottom = stackBottom - PGSIZE;
 	if (newVirtualPage == 0) {
 		cprintf("stackIncre newVirtualPage out of memory.\n");
 		return 0;
 	}
+	uint newPysicalPage = V2P(newVirtualPage);
+	uint newStackBottom = stackBottom - PGSIZE;
 	if (mappages(pgdir, (char*)newStackBottom, PGSIZE, newPysicalPage, PTE_W|PTE_U) < 0) {
 		deallocuvm(pgdir, newStackBottom, stackBottom);
 		kfree(newVirtualPage);
@@ -571,16 +572,16 @@ void pageFault(uint err)
 				return;
 			}
 		}
-		// if (va < PGSIZE){
-		// 	TODO:零指针保护 kill进程
-		// 	cprintf("零指针保护\n");
-		// 	return;
-		// }
+		if (va < PGSIZE){
+			cprintf("error: Use a null pointer. Kill [%s] process. va=%x\n", proc->name, va);
+			proc->killed = 1;
+			return;
+		}
 
 		// stack increase
 		uint stackBottom = KERNBASE - proc->stackSize;
 		uint heapTop = proc->sz + PGSIZE;
-		cprintf("PageFault, Stack Increasing.\n");
+		cprintf("PageFault: Stack Increasing.\n");
 		if (va >= heapTop && va < stackBottom) {
 			if (stackIncre(proc->pgdir) == 0){
 				cprintf("error: Stack increase failed. Kill [%s] process.", proc->name);
@@ -609,14 +610,15 @@ void pageFault(uint err)
 
 	pte_t* pte;
 	if (proc == 0){
-		panic("Pagefault. No process.");
+		panic("pageFault: process should exist");
 	}
 	if ((va >= KERNBASE) || (pte = walkpgdir(proc->pgdir, (void*)va, 0) == 0) || !(*pte & PTE_P) || !(*pte & PTE_U)){
-		cprintf("VA Out of Range. va = %d, pte = %x, *pte = %x\n", va, pte, *pte);
+		cprintf("error: Virtual Address Out of Range. va = %d, pte = %x, *pte = %x\n", va, pte, *pte);
 		proc->killed = 1;
 		return;  
 	}
 
 	// TODO: copy on write
+	// flush page dir
 	lcr3(V2P(proc->pgdir));
 }

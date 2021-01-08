@@ -613,7 +613,7 @@ void pageFault(uint err)
 		panic("pageFault: process should exist");
 	}
 	if ((va >= KERNBASE) || (pte = walkpgdir(proc->pgdir, (void*)va, 0) == 0) || !(*pte & PTE_P) || !(*pte & PTE_U)){
-		cprintf("error: Virtual Address Out of Range. va = %d, pte = %x, *pte = %x\n", va, pte, *pte);
+		//cprintf("error: Virtual Address Out of Range. va = %d, pte = %x, *pte = %x\n", va, pte, *pte);
 		proc->killed = 1;
 		return;  
 	}

@@ -373,9 +373,40 @@ struct internalMemoryEntry* getSwapEntry()
 
 void insertEntry(char *newVirtualAddress)
 {
-	int i = 0;
+	int i, quickCnt = proc->internalEntryCnt + 1;
 	struct internalMemoryTable *curPage = proc->internalTableHead;
 
+	// 尝试快速分配一页
+	while (quickCnt > INTERNAL_TABLE_ENTRY_NUM)
+	{
+		quickCnt -= INTERNAL_TABLE_ENTRY_NUM;
+		curPage = curPage->nxt;
+	}
+	if (curPage->entryList[quickCnt - 1].virtualAddress == SLOT_USABLE)
+	{
+		// 快速分配成功
+		struct internalMemoryEntry *freeEntry = &(curPage->entryList[quickCnt - 1]);
+		if (freeEntry->virtualAddress == SLOT_USABLE)
+		{
+			freeEntry->virtualAddress = newVirtualAddress;
+			freeEntry->nxt = proc->internalEntryHead;
+			if (proc->internalEntryHead == 0)
+			{
+				proc->internalEntryHead = freeEntry;
+				proc->internalEntryTail = freeEntry;
+			}
+			else
+			{
+				proc->internalEntryHead->pre = freeEntry;
+				proc->internalEntryHead = freeEntry;
+			}
+			proc->internalEntryCnt++;
+			return;
+		}
+	}
+	cprintf("quick error\n");
+
+	curPage = proc->internalTableHead;
 	while (curPage != 0)
 	{
 		for (i = 0; i < INTERNAL_TABLE_ENTRY_NUM; i++)
@@ -469,6 +500,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			setInternalHead(proc, lastEntry, (char*)a);
 		}
 		else {
+			cprintf("insert\n");
 			insertEntry((char*)a);
 		}
 

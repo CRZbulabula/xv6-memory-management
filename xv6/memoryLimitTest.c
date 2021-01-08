@@ -20,14 +20,14 @@ void mem_limit(void)
 			printf(1, "cur mem is: %dMB\n", nMB);
 		}
 	}*/
-	for (i = 0; i < 40; i++)
+	for (i = 0; i < 200; i++)
 	{
 		m2 = malloc(oneMB);
 		printf(1, "cur memory is: %dMB\n", i + 1);
 		*(char**)m2 = m1;
 		m1 = m2;
 	}
-	printf(1, "alloc done");
+	printf(1, "alloc done\n");
 	while(m1) {
 		m2 = *(char**)m1;
 		free(m1);

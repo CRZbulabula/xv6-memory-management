@@ -722,12 +722,8 @@ int readExternalFile(struct proc *curProcess, char *buffer, uint offset, uint nB
 
 int writeExternalFile(struct proc *curProcess, char *buffer, uint offset, uint nBytes)
 {
-	int i, writeCnt = 0;
-	for (i = 0; i < nBytes; i++)
-		writeCnt += buffer[i];
-	//cprintf("pid: %d write: %d\n", curProcess->pid, writeCnt);
-
 	int fileID = offset / EXTERNAL_FILE_SIZE;
+	cprintf("pid: %d write: %d\n", curProcess->pid, fileID);
 	if (fileID < 0 || fileID >= EXTERNAL_FILE_MAX_NUM)
 	{
 		panic("write offset wrong\n");

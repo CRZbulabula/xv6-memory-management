@@ -4,9 +4,9 @@ virtualMemory.h
 */
 
 // 虚拟内存页表：每 340 个 entry 为一组，一个页表占用 4088 bytes（约一页）内存
-// 每个 proc 初始化时分配 25 个页表，最大可占用 33MB 内存
+// 每个 proc 初始化时分配 25 个页表，最大可占用 251MB 内存
 #define INTERNAL_TABLE_ENTRY_NUM 340
-#define INTERNAL_TABLE_LENGTH 151
+#define INTERNAL_TABLE_LENGTH 189
 #define INTERNAL_TABLE_TOTAL_ENTRYS (INTERNAL_TABLE_ENTRY_NUM * INTERNAL_TABLE_LENGTH)
 
 // 虚拟内存表项

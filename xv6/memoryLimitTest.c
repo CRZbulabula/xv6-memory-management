@@ -20,8 +20,9 @@ void mem_limit(void)
 			printf(1, "cur mem is: %dMB\n", nMB);
 		}
 	}*/
-	for (i = 0; i < 200; i++)
+	for (i = 0; i < 252; i++)
 	{
+		nMB++;
 		m2 = malloc(oneMB);
 		printf(1, "cur memory is: %dMB\n", i + 1);
 		*(char**)m2 = m1;

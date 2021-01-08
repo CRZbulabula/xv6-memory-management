@@ -352,7 +352,7 @@ struct internalMemoryEntry* getSwapEntry()
 	int fileOffset = externalPlace.Offset;
 
 	//修改交换表和外存
-	//cprintf("[ INFO ] Swapping page out 0x%x.\n", curTail->virtualAddress);
+	cprintf("swap page out 0x%x.\n", curTail->virtualAddress);
 	externalEntry->virtualAddress = curTail->virtualAddress;
 	if (writeExternalFile(proc, (char *)(PTE_ADDR(curTail->virtualAddress)), fileOffset, PGSIZE) == 0)
 	{
@@ -373,9 +373,39 @@ struct internalMemoryEntry* getSwapEntry()
 
 void insertEntry(char *newVirtualAddress)
 {
-	int i = 0;
+	int i, quickCnt = proc->internalEntryCnt + 1;
 	struct internalMemoryTable *curPage = proc->internalTableHead;
 
+	// 尝试快速分配一页
+	while (quickCnt > INTERNAL_TABLE_ENTRY_NUM)
+	{
+		quickCnt -= INTERNAL_TABLE_ENTRY_NUM;
+		curPage = curPage->nxt;
+	}
+	if (curPage->entryList[quickCnt - 1].virtualAddress == SLOT_USABLE)
+	{
+		// 快速分配成功
+		struct internalMemoryEntry *freeEntry = &(curPage->entryList[quickCnt - 1]);
+		if (freeEntry->virtualAddress == SLOT_USABLE)
+		{
+			freeEntry->virtualAddress = newVirtualAddress;
+			freeEntry->nxt = proc->internalEntryHead;
+			if (proc->internalEntryHead == 0)
+			{
+				proc->internalEntryHead = freeEntry;
+				proc->internalEntryTail = freeEntry;
+			}
+			else
+			{
+				proc->internalEntryHead->pre = freeEntry;
+				proc->internalEntryHead = freeEntry;
+			}
+			proc->internalEntryCnt++;
+			return;
+		}
+	}
+
+	curPage = proc->internalTableHead;
 	while (curPage != 0)
 	{
 		for (i = 0; i < INTERNAL_TABLE_ENTRY_NUM; i++)
@@ -414,7 +444,7 @@ struct internalMemoryEntry* recordFile(void)
 // 把一个外存的虚拟地址和内存优先级最低地址交换
 void swapPage(uint swapVirtualAddress)
 {
-	//cprintf("[ INFO ] Swapping page in 0x%x.\n", swapVirtualAddress);
+	cprintf("swapping page in 0x%x.\n", swapVirtualAddress);
 	char SwapBuffer[PGSIZE];
 	pte_t *extPTE;
 	struct internalMemoryEntry* curTail = getSwapEntry();

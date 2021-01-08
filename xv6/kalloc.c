@@ -60,7 +60,6 @@ void
 kfree(char *v)
 {
   struct run *r;
-
   if((uint)v % PGSIZE || v < end || v2p(v) >= PHYSTOP)
     panic("kfree");
 

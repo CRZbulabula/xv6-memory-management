@@ -116,6 +116,8 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            showProcInfo();
+void            InitVirtualMemoryData();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -137,6 +139,7 @@ char*           safestrcpy(char*, const char*, int);
 int             strlen(const char*);
 int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
+void            itoa(int, char *);
 
 // syscall.c
 int             argint(int, int*);
@@ -145,6 +148,9 @@ int             argstr(int, char**);
 int             fetchint(uint, int*);
 int             fetchstr(uint, char**);
 void            syscall(void);
+
+// sysfile.c
+struct          inode* create(char *, short, short, short);
 
 // timer.c
 void            timerinit(void);
@@ -176,6 +182,27 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+int							stackIncre(pde_t*);
+void						pageFault(uint);
+
+// fs.c 虚拟内存读写
+int             initExternalFiles(struct proc *curProcess);
+int             clearExternalFiles(struct proc *curProcess);
+int             readExternalFile(struct proc *curProcess, char *buf, uint offset, uint size);
+int             writeExternalFile(struct proc *curProcess, char *buf, uint offset, uint size);
+
+// VirtualMemory.c
+struct          internalMemoryEntry* getlastInternalEntry(struct proc*);
+struct          externalMemoryPlace getEmptyExternalPlace(struct proc*);
+struct          externalMemoryPlace getAddressInExternal(struct proc *, char*);
+void            setInternalHead(struct proc *CurrentProcess, struct internalMemoryEntry*, char*);
+void            deleteInternalEntry(struct proc*, char*);
+void            deleteExternalEntry(struct proc*, char*);
+void            clearExternalList(struct proc*);
+void            allocInternalList(struct proc*);
+void            clearInternalList(struct proc*);
+int             growExternalTable(struct proc*);
+int             copyInternalMemory(struct proc *, struct proc *);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

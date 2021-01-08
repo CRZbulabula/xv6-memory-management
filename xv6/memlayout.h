@@ -1,7 +1,8 @@
 // Memory layout
 
-#define EXTMEM  0x100000            // Start of extended memory
-#define PHYSTOP 0xE000000           // Top physical memory
+#define EXTMEM   0x100000           // Start of extended memory
+#define PHYSTOP  0xE000000         
+//#define PHYSTOP  0x1F800000         // Top physical memory
 #define DEVSPACE 0xFE000000         // Other devices are at high addresses
 
 // Key addresses for address space layout (see kmap in vm.c for layout)
@@ -20,3 +21,6 @@ static inline void *p2v(uint a) { return (void *) ((a) + KERNBASE); }
 
 #define V2P_WO(x) ((x) - KERNBASE)    // same as V2P, but without casts
 #define P2V_WO(x) ((x) + KERNBASE)    // same as V2P, but without casts
+
+// A special addr indicating this page slot can be used.
+#define SLOT_USABLE ((char*)0xffffffff)      

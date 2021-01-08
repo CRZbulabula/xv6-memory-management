@@ -32,14 +32,20 @@ exec(char *path, char **argv)
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
+  // 初始化虚拟内存表
+  clearInternalList(proc);
+  clearExternalList(proc);
+
   // Load program into memory.
-  sz = 0;
+  sz = PGSIZE;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
     if(ph.type != ELF_PROG_LOAD)
       continue;
     if(ph.memsz < ph.filesz)
+      goto bad;
+    if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
@@ -52,10 +58,16 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+
+  proc->stackSize = 0;
+  if (stackIncre(pgdir) == 0){
     goto bad;
-  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-  sp = sz;
+  }
+  sp = KERNBASE;
+  // if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+  //   goto bad; 
+  // clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+  // sp = sz;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
@@ -86,8 +98,14 @@ exec(char *path, char **argv)
   oldpgdir = proc->pgdir;
   proc->pgdir = pgdir;
   proc->sz = sz;
+  proc->stackSize = PGSIZE;
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
+
+  // 为进程创建外部存储文件
+  clearExternalFiles(proc);
+  initExternalFiles(proc);
+
   switchuvm(proc);
   freevm(oldpgdir);
   return 0;

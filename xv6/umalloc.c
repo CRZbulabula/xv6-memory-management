@@ -60,6 +60,8 @@ morecore(uint nu)
   return freep;
 }
 
+// #define first_fit
+#define next_fit
 void*
 malloc(uint nbytes)
 {
@@ -80,11 +82,17 @@ malloc(uint nbytes)
         p += p->s.size;
         p->s.size = nunits;
       }
+      #ifdef next_fit
       freep = prevp;
+      #endif
       return (void*)(p + 1);
     }
     if(p == freep)
+    {
       if((p = morecore(nunits)) == 0)
+      {
         return 0;
+      }
+    }
   }
 }

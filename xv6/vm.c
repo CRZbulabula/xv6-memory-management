@@ -491,6 +491,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
 int stackIncre(pde_t *pgdir)
 {
+	cprintf("PageFault: Stack Increasing.\n");
 	uint stackBottom = KERNBASE - proc->stackSize;
 	uint heapTop = proc->sz;
 	if (heapTop > stackBottom - PGSIZE) {
@@ -581,7 +582,6 @@ void pageFault(uint err)
 		// stack increase
 		uint stackBottom = KERNBASE - proc->stackSize;
 		uint heapTop = proc->sz + PGSIZE;
-		cprintf("PageFault: Stack Increasing.\n");
 		if (va >= heapTop && va < stackBottom) {
 			if (stackIncre(proc->pgdir) == 0){
 				cprintf("error: Stack increase failed. Kill [%s] process.", proc->name);

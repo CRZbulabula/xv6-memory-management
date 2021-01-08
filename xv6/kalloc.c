@@ -61,7 +61,11 @@ kfree(char *v)
 {
   struct run *r;
   if((uint)v % PGSIZE || v < end || v2p(v) >= PHYSTOP)
+  {
+    cprintf("kfree: %d, %d\n", v, v2p(v));
     panic("kfree");
+  }
+    
 
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);

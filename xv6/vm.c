@@ -374,33 +374,30 @@ struct internalMemoryEntry* getSwapEntry()
 void insertEntry(char *newVirtualAddress)
 {
 	int i = 0;
-	struct internalMemoryTable *curPage = proc->internalTableHead;
-
-	while (curPage != 0)
+	struct internalMemoryEntry *freeEntry;
+	freeEntry = proc->freeInternalEntryHead;
+	if (freeEntry == 0)
 	{
-		for (i = 0; i < INTERNAL_TABLE_ENTRY_NUM; i++)
-		{
-			if (curPage->entryList[i].virtualAddress == SLOT_USABLE)
-			{
-				curPage->entryList[i].virtualAddress = newVirtualAddress;
-				curPage->entryList[i].nxt = proc->internalEntryHead;
-				if (proc->internalEntryHead == 0)
-				{
-					proc->internalEntryHead = &(curPage->entryList[i]);
-					proc->internalEntryTail = &(curPage->entryList[i]);
-				}
-				else
-				{
-					proc->internalEntryHead->pre = &(curPage->entryList[i]);
-					proc->internalEntryHead = &(curPage->entryList[i]);
-				}
-				proc->internalEntryCnt++;
-				return;
-			}
-		}
-		curPage = curPage->nxt;
+		panic("error: cannot insert entry.");
 	}
-	panic("error: cannot insert entry.");
+	if (proc->freeInternalEntryHead->nxt)
+	{
+		proc->freeInternalEntryHead->nxt->pre = 0;
+	}
+	proc->freeInternalEntryHead = proc->freeInternalEntryHead->nxt;
+	proc->freeInternalEntryHead->pre = 0;
+	freeEntry->virtualAddress = newVirtualAddress;
+	freeEntry->nxt = proc->internalEntryHead;
+	if (proc->internalEntryHead == 0)
+	{
+		proc->internalEntryHead = freeEntry;
+		proc->internalEntryTail = freeEntry;
+	}
+	else
+	{
+		proc->internalEntryHead->pre = freeEntry;
+		proc->internalEntryHead = freeEntry;
+	}
 }
 
 /*
@@ -458,28 +455,33 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	if(newsz < oldsz)
 		return oldsz;
 	// can't alloc addr in stack range
-	if (newsz > KERNBASE - proc->stackSize - PGSIZE){
+	if (newsz > KERNBASE - proc->stackSize - PGSIZE)
+	{
 		return 0;
 	}
 
 	a = PGROUNDUP(oldsz);
 	for(; a < newsz; a += PGSIZE) {
-		if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
+		if (proc->freeInternalEntryHead == 0)
+		{
 			struct internalMemoryEntry* lastEntry = getSwapEntry();
 			setInternalHead(proc, lastEntry, (char*)a);
 		}
-		else {
+		else
+		{
 			insertEntry((char*)a);
 		}
 
 		mem = kalloc();
-		if(mem == 0) {
+		if(mem == 0)
+		{
 			cprintf("allocuvm out of memory\n");
 			deallocuvm(pgdir, newsz, oldsz);
 			return 0;
 		}
 		memset(mem, 0, PGSIZE);
-		if (mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0){
+		if (mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
+		{
 			deallocuvm(pgdir, newsz, oldsz);
 			kfree(mem);
 			cprintf("map < 0\n");
@@ -509,7 +511,7 @@ int stackIncre(pde_t *pgdir)
 		kfree(newVirtualPage);
 		return 0;
 	}
-	if (proc->internalEntryCnt >= INTERNAL_TABLE_TOTAL_ENTRYS) {
+	if (proc->freeInternalEntryHead == 0) {
 		struct internalMemoryEntry* tail = recordFile();
 		setInternalHead(proc, tail, (char*)newStackBottom);
 	} else {
@@ -534,7 +536,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 		return oldsz;
 
 	a = PGROUNDUP(newsz);
-	for(; a  < oldsz; a += PGSIZE){
+	for(; a  < oldsz; a += PGSIZE)
+	{
 		pte = walkpgdir(pgdir, (char*)a, 0);
 		if(!pte)
 			a += (NPTENTRIES - 1) * PGSIZE;
@@ -545,12 +548,17 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			}
 			pa = PTE_ADDR(*pte);
 			if(pa == 0)
+			{
+				cprintf("dal\n");
 				panic("kfree");
+			}
+				
 			char *v = p2v(pa);
 			kfree(v);
 			*pte = 0;
 		}
-		else if ((*pte & PTE_PO) && proc->pgdir == pgdir) {
+		else if ((*pte & PTE_PO) && proc->pgdir == pgdir)
+		{
 			deleteExternalEntry(proc, (char*)a);
 		}
 	}

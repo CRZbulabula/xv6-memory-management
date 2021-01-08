@@ -71,10 +71,11 @@ struct proc {
 
   uint stackSize;
 
-  // 虚拟内存页表
+  // 虚拟内存表
   struct internalMemoryTable *internalTableHead;
   struct internalMemoryTable *internalTableTail;
   // 虚拟内存链表
+  struct internalMemoryEntry *freeInternalEntryHead;
   struct internalMemoryEntry *internalEntryHead;
   struct internalMemoryEntry *internalEntryTail;
 
@@ -84,7 +85,6 @@ struct proc {
 
   struct file *externalFiles[EXTERNAL_FILE_MAX_NUM];
 
-  int internalEntryCnt;
   int externalEntryCnt;
 };
 

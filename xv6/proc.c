@@ -35,7 +35,6 @@ void InitVirtualMemoryData()
   for (i = 0; i < NPROC; i++)
   {
     curProc = &ptable.proc[i];
-    curProc->internalEntryCnt = 0;
     curProc->externalEntryCnt = 0;
     curProc->internalEntryHead = 0;
     curProc->internalEntryTail = 0;
@@ -56,8 +55,8 @@ void showProcInfo(struct proc *curProcess)
 	cprintf("Process ID: %d\n", curProcess->pid);
 	cprintf("Process state: %d\n", curProcess->state);
 	cprintf("process memory: %d bytes\n", curProcess->sz);
-	cprintf("internal memory count: %d\n", curProcess->internalEntryCnt);
 	cprintf("external memory count: %d\n", curProcess->externalEntryCnt);
+	cprintf("free internal memory entry head: %p\n", curProcess->freeInternalEntryHead);
 	cprintf("internal memory entry head: %p\n", curProcess->internalEntryHead);
 	cprintf("internal memory list head: %p\n", curProcess->internalTableHead);
 	cprintf("external memory list head: %p\n", curProcess->externalListHead);
@@ -115,7 +114,6 @@ found:
 	{
 		clearInternalList(p);
 	}
-	p->internalEntryCnt = 0;
 	p->internalEntryHead = 0;
 	p->internalEntryTail = 0;
 

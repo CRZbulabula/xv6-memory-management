@@ -62,6 +62,8 @@ morecore(uint nu)
 
 // #define first_fit
 #define next_fit
+// #define best_fit
+// #define worst_fit
 void*
 malloc(uint nbytes)
 {
@@ -71,20 +73,23 @@ malloc(uint nbytes)
   nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
   if((prevp = freep) == 0){
     base.s.ptr = freep = prevp = &base;
+    //printf(1, "&base=%d",&base);
     base.s.size = 0;
   }
-  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
-    if(p->s.size >= nunits){
+  #ifdef next_fit
+  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr)
+  {
+    if(p->s.size >= nunits)
+    {
       if(p->s.size == nunits)
         prevp->s.ptr = p->s.ptr;
-      else {
+      else 
+      {
         p->s.size -= nunits;
         p += p->s.size;
         p->s.size = nunits;
       }
-      #ifdef next_fit
       freep = prevp;
-      #endif
       return (void*)(p + 1);
     }
     if(p == freep)
@@ -95,4 +100,123 @@ malloc(uint nbytes)
       }
     }
   }
+  #endif
+
+  #ifdef first_fit
+  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr)
+  {
+    if(p->s.size >= nunits)
+    {
+      if(p->s.size == nunits)
+        prevp->s.ptr = p->s.ptr;
+      else 
+      {
+        p->s.size -= nunits;
+        p += p->s.size;
+        p->s.size = nunits;
+      }
+      freep = 0;
+      return (void*)(p + 1);
+    }
+    if(p == freep)
+    {
+      if((p = morecore(nunits)) == 0)
+      {
+        return 0;
+      }
+    }
+  }
+  #endif
+
+  #ifdef best_fit
+  Header *nw;
+  int flag=0;
+  uint min_size=10000000;
+  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr)
+  {
+    if(p->s.size == nunits)
+    {
+      prevp->s.ptr = p->s.ptr;
+      freep = 0;
+      return (void*)(p + 1);
+    }
+    if(p->s.size > nunits)
+    {
+      flag=1;
+      if(min_size > p->s.size-nunits)
+      {
+        min_size=p->s.size-nunits;
+        nw=p;
+      }
+    }
+    if(p == freep)
+    {
+      if (flag != 0)
+      {
+        nw->s.size -= nunits;
+        nw += nw->s.size;
+        nw->s.size = nunits;
+        freep = 0;
+        return (void*)(nw + 1);
+      }
+      else if((p = morecore(nunits)) == 0)
+      {
+        return 0;
+      }
+    }
+  }
+  #endif
+
+  #ifdef worst_fit
+  Header *nw,*pre_nw;
+  int flag=0;
+  int max_size=-1;
+  for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr)
+  {
+    if(p->s.size >= nunits)
+    {
+      flag=1;
+      if(max_size < p->s.size-nunits)
+      {
+        max_size=p->s.size-nunits;
+        nw=p;
+        pre_nw=prevp;
+      }
+    }
+    if(p == freep)
+    {
+      if (flag != 0)
+      {
+        if(max_size == 0)
+        {
+          pre_nw->s.ptr = nw->s.ptr; 
+        }
+        else
+        {
+          nw->s.size -= nunits;
+          nw += nw->s.size;
+          nw->s.size = nunits;
+        }
+        freep = 0;
+        return (void*)(nw + 1);
+      }
+      else if((p = morecore(nunits)) == 0)
+      {
+        return 0;
+      }
+    }
+  }
+  #endif
+}
+
+int total_piece()
+{
+  Header *prevp,*p;
+  prevp = freep;
+  int ans=0;
+  for(p = prevp->s.ptr; p!=freep ; prevp = p, p = p->s.ptr)
+  {
+    ans += p->s.size;
+  }
+  return (ans-1)*sizeof(Header);
 }

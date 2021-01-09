@@ -5,7 +5,7 @@
 int main(){
 	void *arr[100];
 	for (int i=0; i<100; i++){
-		arr[i] = malloc(100);
+		arr[i] = malloc(1000);
 	}
 	for (int i=0; i<100; i++){
 		free(arr[i]);

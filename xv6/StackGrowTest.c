@@ -35,7 +35,7 @@ void testMB(int n) {
   printf(1, "testMB n = %d, popping stack[%x].\n", n, array);
 }
 
-#define TestMB 252
+#define TestMB 251
 
 int main() {
   #ifndef TestMB

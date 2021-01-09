@@ -11,5 +11,6 @@ int main(){
 		free(arr[i]);
 	}
 	printf(1, "mallocTest Has Done!\n");
+	printf(1, "The unused piece is %d bytes",total_piece());
 	return 0;
 }

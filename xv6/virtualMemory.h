@@ -4,7 +4,7 @@ virtualMemory.h
 */
 
 // 虚拟内存页表：每 340 个 entry 为一组，一个页表占用 4088 bytes（约一页）内存
-// 每个 proc 初始化时分配 25 个页表，最大可占用 251MB 内存
+// 每个 proc 初始化时分配 189 个页表，最大可占用 251MB 内存
 #define INTERNAL_TABLE_ENTRY_NUM 340
 #define INTERNAL_TABLE_LENGTH 189
 #define INTERNAL_TABLE_TOTAL_ENTRYS (INTERNAL_TABLE_ENTRY_NUM * INTERNAL_TABLE_LENGTH)
@@ -58,7 +58,7 @@ struct externalMemoryPlace
 };
 
 // 外存页表的 entry 对应外存文件
-// 一个外存文件最大 65536 bytes，相当于 16 个外存 entry，最多 6 个文件
+// 一个外存文件最大 200 * 4096 bytes，相当于 200 个外存 entry，最多 6 个文件
 #define EXTERNAL_FILE_SIZE (PGSIZE * 200)
 #define EXTERNAL_FILE_MAX_NUM 6
 #define SWAP_BUFFER_SIZE (PGSIZE / 4) 

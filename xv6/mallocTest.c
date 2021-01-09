@@ -20,9 +20,6 @@ int main(){
 	arr[8]=malloc(120);
 	arr[9]=malloc(50);
 	
-	// for (int i=0; i<1; i++){
-	// 	free( (void*)arr[9]);
-	// }
 	printf(1, "mallocTest Has Done!\n");
 	printf(1, "The unused piece is %d bytes!\n",total_piece());
 	return 0;

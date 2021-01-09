@@ -521,7 +521,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
 int stackIncre(pde_t *pgdir)
 {
-	cprintf("PageFault: Stack Increasing.\n");
+	// cprintf("PageFault: Stack Increasing.\n");
 	uint stackBottom = KERNBASE - proc->stackSize;
 	uint heapTop = proc->sz;
 	if (heapTop > stackBottom - PGSIZE) {

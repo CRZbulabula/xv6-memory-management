@@ -21,10 +21,10 @@ typedef union header Header;
 static Header base;
 static Header *freep,*firp;
 
-#define first_fit
+// #define first_fit
 // #define next_fit
 // #define best_fit
-// #define worst_fit
+#define worst_fit
 void
 free(void *ap)
 {

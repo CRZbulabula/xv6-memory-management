@@ -22,47 +22,33 @@ static Header base;
 static Header *freep,*firp;
 
 // #define first_fit
-// #define next_fit
+#define next_fit
 // #define best_fit
-#define worst_fit
+// #define worst_fit
 void
 free(void *ap)
 {
   Header *bp, *p;
 
   bp = (Header*)ap - 1;
-  printf(1, "free\nbp_size=%d\n",bp->s.size);
   for(p = freep; !(bp > p && bp < p->s.ptr); p = p->s.ptr)
     if(p >= p->s.ptr && (bp > p || bp < p->s.ptr))
       break;
   if(bp + bp->s.size == p->s.ptr){
-    //printf(1,"1..\n");
     bp->s.size += p->s.ptr->s.size;
     bp->s.ptr = p->s.ptr->s.ptr;
   } else
   {
-    //printf(1,"2..\n");
     bp->s.ptr = p->s.ptr;
   }
   if(p + p->s.size == bp){
-    //printf(1,"3..\n");
     p->s.size += bp->s.size;
     p->s.ptr = bp->s.ptr;
   } else
   {
-    //printf(1,"4..\n");
     p->s.ptr = bp;
   }
-    
-  //printf(1,"p=%d p.size=%d p.ptr=%d\n",p,p->s.size,p->s.ptr);
-  if(firp)
-    for(p=firp->s.ptr;p!=firp;p=p->s.ptr)
-    {
-      printf(1,"%d\n",p->s.size);
-    }
   freep = p;
-  
-  //printf(1,"freep_ed=%d\n",freep);
 }
 
 static Header*
@@ -91,12 +77,9 @@ malloc(uint nbytes)
 {
   Header *p, *prevp;
   uint nunits;
-  printf(1,"malloc\n");
   nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
-  printf(1,"%d nunits=%d\n",nbytes,nunits);
   if((prevp = freep) == 0){
     base.s.ptr = freep = prevp = &base;
-    //printf(1, "&base=%d",&base);
     base.s.size = 0;
   }
   #ifdef next_fit
@@ -104,7 +87,6 @@ malloc(uint nbytes)
   {
     if(p->s.size >= nunits)
     {
-      printf(1,"%d\n",p->s.size);
       if(p->s.size == nunits)
         prevp->s.ptr = p->s.ptr;
       else 
@@ -130,7 +112,6 @@ malloc(uint nbytes)
   #ifdef first_fit
   for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr)
   {
-    printf(1,"%d\n",p->s.size);
     if(p->s.size >= nunits)
     {
       if(p->s.size == nunits)

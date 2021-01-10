@@ -35,18 +35,18 @@ void testMB(int n) {
   printf(1, "testMB n = %d, popping stack[%x].\n", n, array);
 }
 
-#define TestMB 251
+//#define TestMB 251
 
 int main() {
   #ifndef TestMB
   printf(1, "==================================\n");
   printf(1, "Stack grow test begin.\n");
-  int depth = 256;
-  printf(1, "Test Stack size [%dKB] by %d recursion.\n", depth, depth);
-  testKB(depth);
-  printf(1, "=========Test Stack Size [%dKB] Success.=========\n", depth);
+  // int depth = 256;
+  // printf(1, "Test Stack size [%dKB] by %d recursion.\n", depth, depth);
+  // testKB(depth);
+  // printf(1, "=========Test Stack Size [%dKB] Success.=========\n", depth);
 
-  depth = 249;
+  int depth = 249;
   printf(1, "Test Stack size [%dMB] by %d recursion.\n", depth, depth);
   testMB(depth);
   printf(1, "=========Test Stack Size [%dMB] Success.=========\n", depth);
